@@ -23,10 +23,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import org.apache.commons.dbcp.BasicDataSource;
 import org.mvel2.templates.TemplateRuntime;
 
@@ -36,7 +38,7 @@ import org.mvel2.templates.TemplateRuntime;
  */
 public class JdbcDriver implements Driver {
     
-    private final Map<String, Integer> _tablesAndSorterFieldNumber = new HashMap<>();
+    private final Set<String> _tables = new HashSet<>();
 
     @Override
     public Object openConnection(String connectionString, Properties properties) {
@@ -57,28 +59,33 @@ public class JdbcDriver implements Driver {
     @Override
     public void closeConnection(Object connection) {
         try{
-            ((BasicDataSource)connection).close();
+            BasicDataSource ds = (BasicDataSource)connection;
+            ds.close();
         }catch(SQLException e){
             throw new StoredMapException("Couldn'c close the connection", e);
         }
     }
 
     
-    private synchronized void _createMainTable(Connection conn, String table) throws SQLException{
-        if(_tablesAndSorterFieldNumber.containsKey(table)){
+    private synchronized void _createTableSet(Connection conn, String table) throws SQLException{
+        if(_tables.contains(table)){
             return;
         }
-        
+
+        Map<String,String>vars = new HashMap<>(3);
+        vars.put("indexName", table);
+        String allSqls = (String) TemplateRuntime.eval(this.getClass().getResourceAsStream("create.sql"), vars);
+        String[]sqls = allSqls.split(";");
+
         try{
             Statement s = conn.createStatement();
             s.execute("select id from " + table + " where id is null"); // dumb test for table existence
         }catch(SQLException e){
-            Map<String,String>vars = new HashMap<>(3);
-            vars.put("indexName", table);
-            String sql = (String) TemplateRuntime.eval(this.getClass().getResourceAsStream("main.sql"), vars);
-
-            Statement st = conn.createStatement();
-            st.executeUpdate(sql);
+            for(String sql: sqls){
+                Statement st = conn.createStatement();
+                st.executeUpdate(sql);
+            }
+            _tables.add(table);
         }
     }
     
@@ -86,14 +93,12 @@ public class JdbcDriver implements Driver {
     @Override
     public byte[] get(String key, String indexName, Object connection) {
         BasicDataSource ds = (BasicDataSource)connection;
-        
         try{ // TODO: convert all to try with resources
             Connection conn = ds.getConnection();
-            _createMainTable(conn, indexName);
+            _createTableSet(conn, indexName);
 
-
-            PreparedStatement ps = conn.prepareStatement("select value from " + indexName + " where id=?");
-            ps.setString(0, key);
+            PreparedStatement ps = conn.prepareStatement("select val from " + indexName + " where id=?");
+            ps.setString(1, key);
             ResultSet rs = ps.executeQuery();
             
             byte[]ret;
@@ -105,6 +110,7 @@ public class JdbcDriver implements Driver {
             
             rs.close();
             ps.close();
+            conn.commit();
             conn.close();
             
             return ret;
@@ -112,17 +118,55 @@ public class JdbcDriver implements Driver {
         }catch(SQLException e){
             throw new RuntimeException(e);
         }
-        
     }
-
+    
     @Override
     public Iterable<String> get(String indexName, Object connection) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        BasicDataSource ds = (BasicDataSource)connection;
+        try{ // TODO: convert all to try with resources
+            Connection conn = ds.getConnection();
+            _createTableSet(conn, indexName);
+
+            PreparedStatement ps = conn.prepareStatement("select id from " + indexName);
+            ResultSet rs = ps.executeQuery();
+
+            ResultIterable ri = new ResultIterable(conn, rs, ps);
+
+            return ri;
+        }catch(SQLException e){
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
     public Iterable<String> get(String indexName, Object connection, String[] anyOfTags) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        BasicDataSource ds = (BasicDataSource)connection;
+        try{ // TODO: convert all to try with resources
+            Connection conn = ds.getConnection();
+            _createTableSet(conn, indexName);
+
+            String tagQ = "";
+            for(int i=0;i<anyOfTags.length;i++){
+                if(i==0){
+                    tagQ = "?";
+                }else{
+                tagQ = tagQ + ",?";
+                }
+            }
+            
+            PreparedStatement ps = conn.prepareStatement("select id from " + indexName + "_tags where tag in (" + tagQ + ")");
+            for(int i=0;i<anyOfTags.length;i++){
+                ps.setString(i+1, anyOfTags[i]);
+            }
+
+            ResultSet rs = ps.executeQuery();
+
+            ResultIterable ri = new ResultIterable(conn, rs, ps);
+
+            return ri;
+        }catch(SQLException e){
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
