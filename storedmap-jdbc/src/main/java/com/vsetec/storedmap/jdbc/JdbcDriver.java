@@ -22,6 +22,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
+import java.time.temporal.TemporalField;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -88,7 +90,96 @@ public class JdbcDriver implements Driver {
             _tables.add(table);
         }
     }
-    
+
+
+    @Override
+    public void put(
+            String key, 
+            String indexName, 
+            Object connection, 
+            byte[] value, 
+            Runnable callbackOnIndex, 
+            Map<String, Object> map, 
+            List<Locale> locales, 
+            List<Byte> sorter, 
+            List<String> tags, 
+            Runnable callbackOnAdditionalIndex) {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    @Override
+    public int tryLock(String key, String indexName, Object connection, int milliseconds) {
+        BasicDataSource ds = (BasicDataSource)connection;
+        try{ // TODO: convert all to try with resources
+            Connection conn = ds.getConnection();
+            _createTableSet(conn, indexName);
+
+            PreparedStatement ps = conn.prepareStatement("select current_timestamp, createdat, waitfor from " + indexName + "_lock where id=?");
+            ps.setString(1, key);
+            ResultSet rs = ps.executeQuery();
+            
+            int millisStillToWait;
+            
+            Timestamp currentTime;
+            if(rs.next()){
+                currentTime = rs.getTimestamp(1);
+                Timestamp createdat = rs.getTimestamp(2);
+                int waitfor = rs.getInt(3);
+                millisStillToWait = (int) (createdat.toInstant().toEpochMilli() + waitfor - currentTime.toInstant().toEpochMilli());
+                
+            }else{
+                currentTime = null;
+                millisStillToWait = 0;
+            }
+            rs.close();
+            ps.close();
+            
+            // write lock time if we are not waiting anymore
+            if(millisStillToWait<=0){
+                
+                if(currentTime==null){ // there was no lock record
+                    ps = conn.prepareStatement("insert into " + indexName + "_lock (id, createdat, waitfor) values (?, current_timestamp, ?)");
+                    ps.setString(1, key);
+                    ps.setInt(2, milliseconds);
+                    ps.executeUpdate();
+                    ps.close();
+                }else{
+                    ps = conn.prepareStatement("update " + indexName + "_lock set createdat=current_timestamp, waitfor=? where id=?");
+                    ps.setInt(1, milliseconds);
+                    ps.setString(2, key);
+                    ps.executeUpdate();
+                    ps.close();
+                }
+                
+            }
+            
+            conn.commit();
+            conn.close();
+            
+            return millisStillToWait;
+
+        }catch(SQLException e){
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void unlock(String key, String indexName, Object connection) {
+        BasicDataSource ds = (BasicDataSource)connection;
+        try{ // TODO: convert all to try with resources
+            Connection conn = ds.getConnection();
+            _createTableSet(conn, indexName);
+
+            PreparedStatement ps = conn.prepareStatement("delete from " + indexName + "_lock where id=?");
+            ps.setString(1, key);
+            ps.executeUpdate();
+            ps.close();
+            conn.commit();
+            conn.close();
+        }catch(SQLException e){
+            throw new RuntimeException(e);
+        }
+    }
     
     @Override
     public byte[] get(String key, String indexName, Object connection) {
@@ -103,7 +194,7 @@ public class JdbcDriver implements Driver {
             
             byte[]ret;
             if(rs.next()){
-                ret = rs.getBytes(0);
+                ret = rs.getBytes(1);
             }else{
                 ret = null;
             }
@@ -150,11 +241,11 @@ public class JdbcDriver implements Driver {
                 if(i==0){
                     tagQ = "?";
                 }else{
-                tagQ = tagQ + ",?";
+                tagQ = tagQ + ",?";  // TODO: optimize with stringbuilder, if it seems really faster (which is not nesesserily true)
                 }
-            }
+            } 
             
-            PreparedStatement ps = conn.prepareStatement("select id from " + indexName + "_tags where tag in (" + tagQ + ")");
+            PreparedStatement ps = conn.prepareStatement("select distinct id from " + indexName + "_tags where tag in (" + tagQ + ")");
             for(int i=0;i<anyOfTags.length;i++){
                 ps.setString(i+1, anyOfTags[i]);
             }
@@ -196,21 +287,6 @@ public class JdbcDriver implements Driver {
 
     @Override
     public Iterable<String> get(String indexName, Object connection, String textQuery, byte[] minSorter, byte[] maxSorter) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-    }
-
-    @Override
-    public long tryLock(String key, String indexName, Object connection, long milliseconds) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-    }
-
-    @Override
-    public void unlock(String key, String indexName, Object connection) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-    }
-
-    @Override
-    public void put(String key, String indexName, Object connection, byte[] value, Runnable callbackOnIndex, Map<String, Object> map, List<Locale> locales, List<Byte> sorter, List<String> tags, Runnable callbackOnAdditionalIndex) {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 

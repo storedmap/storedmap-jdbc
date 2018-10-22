@@ -71,7 +71,7 @@ public class ResultIterable implements Iterable<String>, Closeable {
                             ResultIterable.this.close();
                             return false;
                         } else {
-                            _next = _rs.getString(0);
+                            _next = _rs.getString(1);
                             return true;
                         }
                     } catch (SQLException | IOException e) {

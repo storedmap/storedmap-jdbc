@@ -1,11 +1,17 @@
 create table @{indexName} (
 id varchar(200) primary key, 
-val blob,
-ind clob
+val blob
 );
 
 create table @{indexName}_lock (
-id varchar(200) primary key
+id varchar(200) primary key,
+createdat timestamp,
+waitfor integer
+);
+
+create table @{indexName}_clob (
+id varchar(200) primary key, 
+ind clob
 );
 
 create table @{indexName}_tags (
