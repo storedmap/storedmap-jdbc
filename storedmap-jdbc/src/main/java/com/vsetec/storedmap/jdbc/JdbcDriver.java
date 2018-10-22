@@ -17,13 +17,14 @@ package com.vsetec.storedmap.jdbc;
 
 import com.vsetec.storedmap.Driver;
 import com.vsetec.storedmap.StoredMapException;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
-import java.time.temporal.TemporalField;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -33,6 +34,8 @@ import java.util.Properties;
 import java.util.Set;
 import org.apache.commons.codec.binary.Base32;
 import org.apache.commons.dbcp.BasicDataSource;
+import org.mvel2.templates.CompiledTemplate;
+import org.mvel2.templates.TemplateCompiler;
 import org.mvel2.templates.TemplateRuntime;
 
 /**
@@ -41,11 +44,29 @@ import org.mvel2.templates.TemplateRuntime;
  */
 public class JdbcDriver implements Driver {
     
-    private final Set<String> _tables = new HashSet<>();
     private final Base32 _b32 = new Base32(true);
+    private final Map<String,Map<String,Object>> _indicesAndMvelContext = new HashMap<>();
+    private final Map<String,CompiledTemplate> _dynamicSql = new HashMap<>();
+    private final Map<String,Map<String,String>> _indexStaticSql = new HashMap<>();
 
     @Override
     public Object openConnection(String connectionString, Properties properties) {
+        
+        Properties sqlProps = new Properties();
+        try{
+            sqlProps.load(this.getClass().getResourceAsStream("queries.properties"));
+        }catch(IOException e){
+            throw new RuntimeException("Couldn't initialize driver", e);
+        }
+
+        _dynamicSql.clear();
+        _indexStaticSql.clear();
+        for(String queryName : sqlProps.stringPropertyNames()){
+            String sqlTemplate = sqlProps.getProperty(queryName);
+            CompiledTemplate ct = TemplateCompiler.compileTemplate(sqlTemplate);
+            _dynamicSql.put(queryName, ct);
+            _indexStaticSql.put(queryName, new HashMap<>());
+        }
         
         BasicDataSource ds = new BasicDataSource();
         
@@ -72,24 +93,25 @@ public class JdbcDriver implements Driver {
 
     
     private synchronized void _createTableSet(Connection conn, String table) throws SQLException{
-        if(_tables.contains(table)){
+        if(_indicesAndMvelContext.containsKey(table)){
             return;
         }
 
         Map<String,String>vars = new HashMap<>(3);
         vars.put("indexName", table);
-        String allSqls = (String) TemplateRuntime.eval(this.getClass().getResourceAsStream("create.sql"), vars);
+        String allSqls = (String) TemplateRuntime.execute(_dynamicSql.get("create"), vars);
         String[]sqls = allSqls.split(";");
+        String checkSql = (String) TemplateRuntime.execute(_dynamicSql.get("check"), vars);
 
         try{
             Statement s = conn.createStatement();
-            s.execute("select id from " + table + " where id is null"); // dumb test for table existence
+            s.execute(checkSql); // dumb test for table existence
         }catch(SQLException e){
             for(String sql: sqls){
                 Statement st = conn.createStatement();
                 st.executeUpdate(sql);
             }
-            _tables.add(table);
+            _indicesAndMvelContext.put(table, Collections.unmodifiableMap(vars));
         }
     }
 
@@ -109,14 +131,52 @@ public class JdbcDriver implements Driver {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
+    private String _getSql(String indexName, String queryName, Object...paramsNameValue){
+        
+        String ret;
+        Map<String,String>stat;
+        if(paramsNameValue==null||paramsNameValue.length==0){
+            stat = _indexStaticSql.get(queryName);
+            synchronized(stat){
+                ret = _indexStaticSql.get(queryName).get(indexName);
+            }
+        }else{
+            ret = null;
+            stat = null;
+        }
+        
+        if(ret==null){
+            CompiledTemplate ct = _dynamicSql.get(queryName);
+            Map<String,Object>context = _indicesAndMvelContext.get(indexName);
+            
+            if(stat!=null){
+                ret = (String) TemplateRuntime.execute(ct, context);
+                synchronized(stat){
+                    stat.put(indexName, ret);
+                }
+            }else{
+                
+                context = new HashMap<>(context);
+                for(int i=0;i<paramsNameValue.length;i++){
+                    context.put((String) paramsNameValue[i], paramsNameValue[++i]);
+                }
+                ret = (String) TemplateRuntime.execute(ct, context);
+                
+            }
+        }
+        
+        return ret;
+        
+    }
+    
     @Override
     public int tryLock(String key, String indexName, Object connection, int milliseconds) {
         BasicDataSource ds = (BasicDataSource)connection;
         try{ // TODO: convert all to try with resources
             Connection conn = ds.getConnection();
             _createTableSet(conn, indexName);
-
-            PreparedStatement ps = conn.prepareStatement("select current_timestamp, createdat, waitfor from " + indexName + "_lock where id=?");
+            String sql = _getSql(indexName, "selectLock");
+            PreparedStatement ps = conn.prepareStatement(sql);
             ps.setString(1, key);
             ResultSet rs = ps.executeQuery();
             
@@ -140,13 +200,15 @@ public class JdbcDriver implements Driver {
             if(millisStillToWait<=0){
                 
                 if(currentTime==null){ // there was no lock record
-                    ps = conn.prepareStatement("insert into " + indexName + "_lock (id, createdat, waitfor) values (?, current_timestamp, ?)");
+                    sql = _getSql(indexName, "insertLock");
+                    ps = conn.prepareStatement(sql);
                     ps.setString(1, key);
                     ps.setInt(2, milliseconds);
                     ps.executeUpdate();
                     ps.close();
                 }else{
-                    ps = conn.prepareStatement("update " + indexName + "_lock set createdat=current_timestamp, waitfor=? where id=?");
+                    sql = _getSql(indexName, "updateLock");
+                    ps = conn.prepareStatement(sql);
                     ps.setInt(1, milliseconds);
                     ps.setString(2, key);
                     ps.executeUpdate();
@@ -171,8 +233,8 @@ public class JdbcDriver implements Driver {
         try{ // TODO: convert all to try with resources
             Connection conn = ds.getConnection();
             _createTableSet(conn, indexName);
-
-            PreparedStatement ps = conn.prepareStatement("delete from " + indexName + "_lock where id=?");
+            String sql = _getSql(indexName, "deleteLock");
+            PreparedStatement ps = conn.prepareStatement(sql);
             ps.setString(1, key);
             ps.executeUpdate();
             ps.close();
@@ -190,7 +252,7 @@ public class JdbcDriver implements Driver {
             Connection conn = ds.getConnection();
             _createTableSet(conn, indexName);
 
-            PreparedStatement ps = conn.prepareStatement("select val from " + indexName + " where id=?");
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectById"));
             ps.setString(1, key);
             ResultSet rs = ps.executeQuery();
             
@@ -220,7 +282,7 @@ public class JdbcDriver implements Driver {
             Connection conn = ds.getConnection();
             _createTableSet(conn, indexName);
 
-            PreparedStatement ps = conn.prepareStatement("select id from " + indexName);
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectAll"));
             ResultSet rs = ps.executeQuery();
 
             ResultIterable ri = new ResultIterable(conn, rs, ps);
@@ -237,17 +299,8 @@ public class JdbcDriver implements Driver {
         try{ // TODO: convert all to try with resources
             Connection conn = ds.getConnection();
             _createTableSet(conn, indexName);
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectById", "tags", anyOfTags));
 
-            String tagQ = "";
-            for(int i=0;i<anyOfTags.length;i++){
-                if(i==0){
-                    tagQ = "?";
-                }else{
-                tagQ = tagQ + ",?";  // TODO: optimize with stringbuilder, if it seems really faster (which is not nesesserily true)
-                }
-            } 
-            
-            PreparedStatement ps = conn.prepareStatement("select distinct id from " + indexName + "_tags where tag in (" + tagQ + ")");
             for(int i=0;i<anyOfTags.length;i++){
                 ps.setString(i+1, anyOfTags[i]);
             }
@@ -269,26 +322,7 @@ public class JdbcDriver implements Driver {
             Connection conn = ds.getConnection();
             _createTableSet(conn, indexName);
 
-            String sql = "select id from " + indexName + "_sort ";
-            if(minSorter!=null){
-                if(maxSorter!=null){
-                    sql = sql + "where sort > ? and sort <= ?";
-                }else{
-                    sql = sql + "where sort > ?";
-                }
-            }else{
-                if(maxSorter!=null){
-                    sql = sql + "where sort <= ?";
-                }
-            }
-            
-            if(ascending){
-                sql = sql + " order by sort";
-            }else{
-                sql = sql + " order by sort desc";
-            }
-            
-            PreparedStatement ps = conn.prepareStatement(sql);
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTags", "minSorter", minSorter, "maxSorter", maxSorter, "ascending", ascending));
             int i=1;
             if(minSorter!=null){
                 ps.setString(i, _b32.encodeAsString(minSorter));
@@ -320,38 +354,7 @@ public class JdbcDriver implements Driver {
             Connection conn = ds.getConnection();
             _createTableSet(conn, indexName);
 
-            String sql = "select distinct " + indexName + "_sort.id from " + indexName + "_sort inner join " + indexName + "_tags on " + indexName + "_sort.id=" + indexName + "_tags.id where ";
-
-            String tagQ = "";
-            for(int i=0;i<anyOfTags.length;i++){
-                if(i==0){
-                    tagQ = "?";
-                }else{
-                tagQ = tagQ + ",?";  // TODO: optimize with stringbuilder, if it seems really faster (which is not nesesserily true)
-                }
-            } 
-
-            if(minSorter!=null){
-                if(maxSorter!=null){
-                    sql = sql + "sort > ? and sort <= ? and tag in ("+tagQ+")";
-                }else{
-                    sql = sql + "sort > ? and tag in ("+tagQ+")";
-                }
-            }else{
-                if(maxSorter!=null){
-                    sql = sql + "sort <= ? and tag in ("+tagQ+")";
-                }else{
-                    sql = sql + "tag in ("+tagQ+")";
-                }
-            }
-            
-            if(ascending){
-                sql = sql + " order by sort";
-            }else{
-                sql = sql + " order by sort desc";
-            }
-            
-            PreparedStatement ps = conn.prepareStatement(sql);
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTags", "tags", anyOfTags, "minSorter", minSorter, "maxSorter", maxSorter, "ascending", ascending));
             int i=1;
             if(minSorter!=null){
                 ps.setString(i, _b32.encodeAsString(minSorter));
