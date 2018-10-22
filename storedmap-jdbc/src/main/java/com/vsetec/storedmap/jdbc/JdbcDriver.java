@@ -31,6 +31,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import org.apache.commons.codec.binary.Base32;
 import org.apache.commons.dbcp.BasicDataSource;
 import org.mvel2.templates.TemplateRuntime;
 
@@ -41,6 +42,7 @@ import org.mvel2.templates.TemplateRuntime;
 public class JdbcDriver implements Driver {
     
     private final Set<String> _tables = new HashSet<>();
+    private final Base32 _b32 = new Base32(true);
 
     @Override
     public Object openConnection(String connectionString, Properties properties) {
@@ -261,8 +263,49 @@ public class JdbcDriver implements Driver {
     }
 
     @Override
-    public Iterable<String> get(String indexName, Object connection, byte[] minSorter, byte[] maxSorter) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    public Iterable<String> get(String indexName, Object connection, byte[] minSorter, byte[] maxSorter, boolean ascending) {
+        BasicDataSource ds = (BasicDataSource)connection;
+        try{ // TODO: convert all to try with resources
+            Connection conn = ds.getConnection();
+            _createTableSet(conn, indexName);
+
+            String sql = "select id from " + indexName + "_sort ";
+            if(minSorter!=null){
+                if(maxSorter!=null){
+                    sql = sql + "where sort > ? and sort <= ?";
+                }else{
+                    sql = sql + "where sort > ?";
+                }
+            }else{
+                if(maxSorter!=null){
+                    sql = sql + "where sort <= ?";
+                }
+            }
+            
+            if(ascending){
+                sql = sql + " order by sort";
+            }else{
+                sql = sql + " order by sort desc";
+            }
+            
+            PreparedStatement ps = conn.prepareStatement(sql);
+            int i=1;
+            if(minSorter!=null){
+                ps.setString(i, _b32.encodeAsString(minSorter));
+                i++;
+            }
+            if(maxSorter!=null){
+                ps.setString(i, _b32.encodeAsString(maxSorter));
+                i++;
+            }
+            ResultSet rs = ps.executeQuery();
+
+            ResultIterable ri = new ResultIterable(conn, rs, ps);
+
+            return ri;
+        }catch(SQLException e){
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -271,8 +314,67 @@ public class JdbcDriver implements Driver {
     }
 
     @Override
-    public Iterable<String> get(String indexName, Object connection, byte[] minSorter, byte[] maxSorter, String[] anyOfTags) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    public Iterable<String> get(String indexName, Object connection, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending) {
+        BasicDataSource ds = (BasicDataSource)connection;
+        try{ // TODO: convert all to try with resources
+            Connection conn = ds.getConnection();
+            _createTableSet(conn, indexName);
+
+            String sql = "select distinct " + indexName + "_sort.id from " + indexName + "_sort inner join " + indexName + "_tags on " + indexName + "_sort.id=" + indexName + "_tags.id where ";
+
+            String tagQ = "";
+            for(int i=0;i<anyOfTags.length;i++){
+                if(i==0){
+                    tagQ = "?";
+                }else{
+                tagQ = tagQ + ",?";  // TODO: optimize with stringbuilder, if it seems really faster (which is not nesesserily true)
+                }
+            } 
+
+            if(minSorter!=null){
+                if(maxSorter!=null){
+                    sql = sql + "sort > ? and sort <= ? and tag in ("+tagQ+")";
+                }else{
+                    sql = sql + "sort > ? and tag in ("+tagQ+")";
+                }
+            }else{
+                if(maxSorter!=null){
+                    sql = sql + "sort <= ? and tag in ("+tagQ+")";
+                }else{
+                    sql = sql + "tag in ("+tagQ+")";
+                }
+            }
+            
+            if(ascending){
+                sql = sql + " order by sort";
+            }else{
+                sql = sql + " order by sort desc";
+            }
+            
+            PreparedStatement ps = conn.prepareStatement(sql);
+            int i=1;
+            if(minSorter!=null){
+                ps.setString(i, _b32.encodeAsString(minSorter));
+                i++;
+            }
+            if(maxSorter!=null){
+                ps.setString(i, _b32.encodeAsString(maxSorter));
+                i++;
+            }
+            
+            for(String tag: anyOfTags){
+                ps.setString(i, tag);
+                i++;
+            }
+
+            ResultSet rs = ps.executeQuery();
+
+            ResultIterable ri = new ResultIterable(conn, rs, ps);
+
+            return ri;
+        }catch(SQLException e){
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -281,27 +383,17 @@ public class JdbcDriver implements Driver {
     }
 
     @Override
-    public Iterable<String> get(String indexName, Object connection, String textQuery, byte[] minSorter, byte[] maxSorter, String[] anyOfTags) {
+    public Iterable<String> get(String indexName, Object connection, String textQuery, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending) {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
-    public Iterable<String> get(String indexName, Object connection, String textQuery, byte[] minSorter, byte[] maxSorter) {
+    public Iterable<String> get(String indexName, Object connection, String textQuery, byte[] minSorter, byte[] maxSorter, boolean ascending) {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
-    public String[] getTags(String key, String indexName, Object connection) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-    }
-
-    @Override
-    public byte[] getSorter(String key, String indexName, Object connection) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-    }
-
-    @Override
-    public void removeTagsSorterAndFulltext(String key, String indexName, Object connection, Runnable callback) {
+    public void remove(String key, String indexName, Object connection, Runnable callback) {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 

@@ -22,7 +22,7 @@ primary key (tag, id)
 
 create table @{indexName}_sort (
 id varchar(200) primary key,
-sort varchar(200) for bit data
+sort varchar(500)
 );
 
 create index @{indexName}_sort_ind 
