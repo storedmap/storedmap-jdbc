@@ -27,10 +27,12 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import org.apache.commons.codec.binary.Base32;
 import org.apache.commons.dbcp.BasicDataSource;
 import org.mvel2.templates.CompiledTemplate;
@@ -44,7 +46,8 @@ import org.mvel2.templates.TemplateRuntime;
 public abstract class AbstractJdbcDriver implements Driver {
 
     private final Base32 _b32 = new Base32(true);
-    private final Map<String, Map<String, Object>> _indicesAndMvelContext = new HashMap<>();
+    private final Map<BasicDataSource, Set<String>> _indices = new HashMap<>();
+    private final Map<String, Map<String, Object>> _mvelContext = new HashMap<>();
     private final Map<String, CompiledTemplate> _dynamicSql = new HashMap<>();
     private final Map<String, Map<String, String>> _indexStaticSql = new HashMap<>();
 
@@ -77,8 +80,9 @@ public abstract class AbstractJdbcDriver implements Driver {
             ds.addConnectionProperty((String) entry.getKey(), (String) entry.getValue());
         });
 
+        _indices.put(ds, new HashSet<>());
+
         //TODO: implement a single thread very old lock sweeper - remove locks that are a month old from time to time like once a week
-        
         return ds;
     }
 
@@ -86,15 +90,18 @@ public abstract class AbstractJdbcDriver implements Driver {
     public void closeConnection(Object connection) {
         try {
             BasicDataSource ds = (BasicDataSource) connection;
+            _indices.remove(ds);
             ds.close();
         } catch (SQLException e) {
             throw new StoredMapException("Couldn'c close the connection", e);
         }
     }
 
-    private synchronized void _createTableSet(Connection conn, String table) throws SQLException {
-        if (_indicesAndMvelContext.containsKey(table)) {
-            return;
+    private synchronized Connection _getSqlConnection(BasicDataSource connection, String table) throws SQLException {
+        Connection conn = connection.getConnection();
+        Set<String> tables = _indices.get(connection);
+        if (tables.contains(table)) {
+            return conn;
         }
 
         Map<String, String> vars = new HashMap<>(3);
@@ -111,8 +118,10 @@ public abstract class AbstractJdbcDriver implements Driver {
                 Statement st = conn.createStatement();
                 st.executeUpdate(sql);
             }
-            _indicesAndMvelContext.put(table, Collections.unmodifiableMap(vars));
+            tables.add(table);
+            _mvelContext.put(table, Collections.unmodifiableMap(vars));
         }
+        return conn;
     }
 
     @Override
@@ -130,8 +139,7 @@ public abstract class AbstractJdbcDriver implements Driver {
 
         BasicDataSource ds = (BasicDataSource) connection;
         try { // TODO: convert all to try with resources
-            Connection conn = ds.getConnection();
-            _createTableSet(conn, indexName);
+            Connection conn = _getSqlConnection(ds, indexName);
 
             // first remove all
             String sql = _getSql(indexName, "deleteIndex");
@@ -227,7 +235,7 @@ public abstract class AbstractJdbcDriver implements Driver {
 
         if (ret == null) {
             CompiledTemplate ct = _dynamicSql.get(queryName);
-            Map<String, Object> context = _indicesAndMvelContext.get(indexName);
+            Map<String, Object> context = _mvelContext.get(indexName);
 
             if (stat != null) {
                 ret = (String) TemplateRuntime.execute(ct, context);
@@ -253,8 +261,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     public int tryLock(String key, String indexName, Object connection, int milliseconds) {
         BasicDataSource ds = (BasicDataSource) connection;
         try { // TODO: convert all to try with resources
-            Connection conn = ds.getConnection();
-            _createTableSet(conn, indexName);
+            Connection conn = _getSqlConnection(ds, indexName);
             String sql = _getSql(indexName, "selectLock");
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setString(1, key);
@@ -311,8 +318,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     public void unlock(String key, String indexName, Object connection) {
         BasicDataSource ds = (BasicDataSource) connection;
         try { // TODO: convert all to try with resources
-            Connection conn = ds.getConnection();
-            _createTableSet(conn, indexName);
+            Connection conn = _getSqlConnection(ds, indexName);
             String sql = _getSql(indexName, "deleteLock");
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setString(1, key);
@@ -329,8 +335,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     public byte[] get(String key, String indexName, Object connection) {
         BasicDataSource ds = (BasicDataSource) connection;
         try { // TODO: convert all to try with resources
-            Connection conn = ds.getConnection();
-            _createTableSet(conn, indexName);
+            Connection conn = _getSqlConnection(ds, indexName);
 
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectById"));
             ps.setString(1, key);
@@ -359,8 +364,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     public Iterable<String> get(String indexName, Object connection) {
         BasicDataSource ds = (BasicDataSource) connection;
         try { // TODO: convert all to try with resources
-            Connection conn = ds.getConnection();
-            _createTableSet(conn, indexName);
+            Connection conn = _getSqlConnection(ds, indexName);
 
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectAll"));
             ResultSet rs = ps.executeQuery();
@@ -377,8 +381,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     public Iterable<String> get(String indexName, Object connection, String[] anyOfTags) {
         BasicDataSource ds = (BasicDataSource) connection;
         try { // TODO: convert all to try with resources
-            Connection conn = ds.getConnection();
-            _createTableSet(conn, indexName);
+            Connection conn = _getSqlConnection(ds, indexName);
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectById", "tags", anyOfTags));
 
             for (int i = 0; i < anyOfTags.length; i++) {
@@ -399,8 +402,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     public Iterable<String> get(String indexName, Object connection, byte[] minSorter, byte[] maxSorter, boolean ascending) {
         BasicDataSource ds = (BasicDataSource) connection;
         try { // TODO: convert all to try with resources
-            Connection conn = ds.getConnection();
-            _createTableSet(conn, indexName);
+            Connection conn = _getSqlConnection(ds, indexName);
 
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTags", "minSorter", minSorter, "maxSorter", maxSorter, "ascending", ascending));
             int i = 1;
@@ -426,8 +428,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     public Iterable<String> get(String indexName, Object connection, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending) {
         BasicDataSource ds = (BasicDataSource) connection;
         try { // TODO: convert all to try with resources
-            Connection conn = ds.getConnection();
-            _createTableSet(conn, indexName);
+            Connection conn = _getSqlConnection(ds, indexName);
 
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTags", "tags", anyOfTags, "minSorter", minSorter, "maxSorter", maxSorter, "ascending", ascending));
             int i = 1;
@@ -459,8 +460,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     public void remove(String key, String indexName, Object connection, Runnable callback) {
         BasicDataSource ds = (BasicDataSource) connection;
         try { // TODO: convert all to try with resources
-            Connection conn = ds.getConnection();
-            _createTableSet(conn, indexName);
+            Connection conn = _getSqlConnection(ds, indexName);
 
             String sql = _getSql(indexName, "deleteIndex");
             PreparedStatement ps = conn.prepareStatement(sql);
