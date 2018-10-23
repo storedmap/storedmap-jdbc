@@ -69,7 +69,7 @@ public abstract class AbstractJdbcDriver implements Driver {
 
         BasicDataSource ds = new BasicDataSource();
 
-        ds.setUrl(properties.getProperty(connectionString));
+        ds.setUrl(connectionString);
         ds.setDriverClassName(properties.getProperty("storedmap.jdbc.driver"));
         ds.setUsername(properties.getProperty("storedmap.jdbc.user"));
         ds.setPassword(properties.getProperty("storedmap.jdbc.password"));
