@@ -28,7 +28,6 @@ import java.sql.Timestamp;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
@@ -132,9 +131,9 @@ public abstract class AbstractJdbcDriver implements Driver {
             byte[] value,
             Runnable callbackOnIndex,
             Map<String, Object> map,
-            List<Locale> locales,
-            List<Byte> sorter,
-            List<String> tags,
+            Locale[] locales,
+            byte[] sorter,
+            String[] tags,
             Runnable callbackOnAdditionalIndex) {
 
         BasicDataSource ds = (BasicDataSource) connection;
@@ -179,7 +178,7 @@ public abstract class AbstractJdbcDriver implements Driver {
 
             // now insert additional indexing data
             // tags:
-            if (tags != null && tags.size() > 1) {
+            if (tags != null && tags.length > 1) {
                 sql = _getSql(indexName, "insertTag");
                 ps = conn.prepareStatement(sql);
                 for (String tag : tags) {
@@ -191,14 +190,10 @@ public abstract class AbstractJdbcDriver implements Driver {
             }
             // sorter
             if (sorter != null) {
-                byte[] sorterB = new byte[sorter.size()];
-                for (int i = 0; i < sorterB.length; i++) {
-                    sorterB[i] = sorter.get(i);
-                }
                 sql = _getSql(indexName, "insertSort");
                 ps = conn.prepareStatement(sql);
                 ps.setString(1, key);
-                ps.setString(2, _b32.encodeAsString(sorterB));
+                ps.setString(2, _b32.encodeAsString(sorter));
                 ps.executeUpdate();
                 ps.close();
             }
@@ -217,7 +212,7 @@ public abstract class AbstractJdbcDriver implements Driver {
         }
     }
 
-    public abstract void indexFullText(String key, String indexName, Object connection, Map<String, Object> map, List<Locale> locales);
+    public abstract void indexFullText(String key, String indexName, Object connection, Map<String, Object> map, Locale[] locales);
 
     private String _getSql(String indexName, String queryName, Object... paramsNameValue) {
 
