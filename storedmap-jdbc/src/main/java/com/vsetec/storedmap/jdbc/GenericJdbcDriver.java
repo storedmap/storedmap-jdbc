@@ -16,19 +16,12 @@
 package com.vsetec.storedmap.jdbc;
 
 import java.util.Collections;
-import java.util.Locale;
-import java.util.Map;
 
 /**
  *
  * @author Fyodor Kravchenko <fedd@vsetec.com>
  */
 public class GenericJdbcDriver extends AbstractJdbcDriver {
-
-    @Override
-    public void indexFullText(String key, String indexName, Object connection, Map<String, Object> map, Locale[] locales) {
-
-    }
 
     @Override
     public int getMaximumIndexNameLength() {

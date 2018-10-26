@@ -15,6 +15,8 @@
  */
 package com.vsetec.storedmap.jdbc;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vsetec.storedmap.Driver;
 import com.vsetec.storedmap.StoredMapException;
 import java.io.ByteArrayInputStream;
@@ -25,6 +27,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,6 +48,7 @@ import org.mvel2.templates.TemplateRuntime;
 public abstract class AbstractJdbcDriver implements Driver {
 
     private final Base32 _b32 = new Base32(true);
+    private final ObjectMapper _om = new ObjectMapper();
     private final Map<BasicDataSource, Set<String>> _indices = new HashMap<>();
     private final Map<String, Map<String, Object>> _mvelContext = new HashMap<>();
     private final Map<String, CompiledTemplate> _dynamicSql = new HashMap<>();
@@ -129,7 +133,43 @@ public abstract class AbstractJdbcDriver implements Driver {
             String indexName,
             Object connection,
             byte[] value,
-            Runnable callbackOnIndex,
+            Runnable callbackOnIndex) {
+
+        BasicDataSource ds = (BasicDataSource) connection;
+        try { // TODO: convert all to try with resources
+            Connection conn = _getSqlConnection(ds, indexName);
+
+            // first remove all
+            String sql = _getSql(indexName, "delete");
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setString(1, key);
+            ps.executeUpdate();
+            ps.close();
+
+            // now insert main value
+            sql = _getSql(indexName, "insert");
+            ps = conn.prepareStatement(sql);
+            ps.setString(1, key);
+            ps.setBlob(2, new ByteArrayInputStream(value));
+            ps.executeUpdate();
+            ps.close();
+
+            // call first callback
+            callbackOnIndex.run();
+
+            conn.commit();
+            conn.close();
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void put(
+            String key,
+            String indexName,
+            Object connection,
             Map<String, Object> map,
             Locale[] locales,
             byte[] sorter,
@@ -140,79 +180,43 @@ public abstract class AbstractJdbcDriver implements Driver {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
-            // first remove all
             String sql = _getSql(indexName, "deleteIndex");
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setString(1, key);
             ps.executeUpdate();
             ps.close();
 
-            sql = _getSql(indexName, "deleteText");
-            ps = conn.prepareStatement(sql);
-            ps.setString(1, key);
-            ps.executeUpdate();
-            ps.close();
-
-            sql = _getSql(indexName, "deleteTags");
-            ps = conn.prepareStatement(sql);
-            ps.setString(1, key);
-            ps.executeUpdate();
-            ps.close();
-
-            sql = _getSql(indexName, "deleteSort");
-            ps = conn.prepareStatement(sql);
-            ps.setString(1, key);
-            ps.executeUpdate();
-            ps.close();
-
-            // now insert main value
+            // now insert additional indexing data
             sql = _getSql(indexName, "insertIndex");
             ps = conn.prepareStatement(sql);
-            ps.setString(1, key);
-            ps.setBlob(2, new ByteArrayInputStream(value));
-            ps.executeUpdate();
-            ps.close();
-
-            // call first callback
-            callbackOnIndex.run();
-
-            // now insert additional indexing data
-            // tags:
-            if (tags != null && tags.length > 1) {
-                sql = _getSql(indexName, "insertTag");
-                ps = conn.prepareStatement(sql);
+            String json = _om.writeValueAsString(map);
+            String sorterStr = _b32.encodeAsString(sorter);
+            if (tags != null && tags.length > 0) {
                 for (String tag : tags) {
                     ps.setString(1, key);
-                    ps.setString(2, tag);
+                    ps.setString(2, json);
+                    ps.setString(3, tag);
+                    ps.setString(4, sorterStr);
                     ps.executeUpdate();
                 }
-                ps.close();
-            }
-            // sorter
-            if (sorter != null) {
-                sql = _getSql(indexName, "insertSort");
-                ps = conn.prepareStatement(sql);
+            } else {
                 ps.setString(1, key);
-                ps.setString(2, _b32.encodeAsString(sorter));
+                ps.setString(2, json);
+                ps.setNull(3, Types.VARCHAR);
+                ps.setString(4, sorterStr);
                 ps.executeUpdate();
-                ps.close();
             }
-            // map as json text for full text search or anything. 
-            // TODO: make customizable database server wise. Might respect the Locales to command which languages are used for fulltext indexing
-
-            indexFullText(key, indexName, connection, map, locales);
+            ps.close();
 
             conn.commit();
             conn.close();
 
             callbackOnAdditionalIndex.run();
 
-        } catch (SQLException e) {
+        } catch (SQLException | JsonProcessingException e) {
             throw new RuntimeException(e);
         }
     }
-
-    public abstract void indexFullText(String key, String indexName, Object connection, Map<String, Object> map, Locale[] locales);
 
     private String _getSql(String indexName, String queryName, Object... paramsNameValue) {
 
@@ -457,25 +461,13 @@ public abstract class AbstractJdbcDriver implements Driver {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
-            String sql = _getSql(indexName, "deleteIndex");
+            String sql = _getSql(indexName, "delete");
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setString(1, key);
             ps.executeUpdate();
             ps.close();
 
-            sql = _getSql(indexName, "deleteText");
-            ps = conn.prepareStatement(sql);
-            ps.setString(1, key);
-            ps.executeUpdate();
-            ps.close();
-
-            sql = _getSql(indexName, "deleteTags");
-            ps = conn.prepareStatement(sql);
-            ps.setString(1, key);
-            ps.executeUpdate();
-            ps.close();
-
-            sql = _getSql(indexName, "deleteSort");
+            sql = _getSql(indexName, "deleteIndex");
             ps = conn.prepareStatement(sql);
             ps.setString(1, key);
             ps.executeUpdate();
