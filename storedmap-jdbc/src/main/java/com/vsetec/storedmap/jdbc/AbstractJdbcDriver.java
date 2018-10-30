@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import org.apache.commons.codec.binary.Base32;
+import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.dbcp.BasicDataSource;
 import org.mvel2.templates.CompiledTemplate;
 import org.mvel2.templates.TemplateCompiler;
@@ -48,6 +49,7 @@ import org.mvel2.templates.TemplateRuntime;
 public abstract class AbstractJdbcDriver implements Driver {
 
     private final Base32 _b32 = new Base32(true);
+    private final Base64 _b64 = new Base64();
     private final ObjectMapper _om = new ObjectMapper();
     private final Map<BasicDataSource, Set<String>> _indices = new HashMap<>();
     private final Map<String, Map<String, Object>> _mvelContext = new HashMap<>();
@@ -75,13 +77,16 @@ public abstract class AbstractJdbcDriver implements Driver {
 
         BasicDataSource ds = new BasicDataSource();
 
+        properties.entrySet().forEach((entry) -> {
+            ds.addConnectionProperty((String) entry.getKey(), (String) entry.getValue());
+        });
+        
         ds.setUrl(connectionString);
         ds.setDriverClassName(properties.getProperty("storedmap.jdbc.driver"));
         ds.setUsername(properties.getProperty("storedmap.jdbc.user"));
         ds.setPassword(properties.getProperty("storedmap.jdbc.password"));
-        properties.entrySet().forEach((entry) -> {
-            ds.addConnectionProperty((String) entry.getKey(), (String) entry.getValue());
-        });
+        
+        ds.setDefaultAutoCommit(false);
 
         _indices.put(ds, new HashSet<>());
 
@@ -101,30 +106,40 @@ public abstract class AbstractJdbcDriver implements Driver {
     }
 
     private synchronized Connection _getSqlConnection(BasicDataSource connection, String table) throws SQLException {
-        Connection conn = connection.getConnection();
-        Set<String> tables = _indices.get(connection);
-        if (tables.contains(table)) {
-            return conn;
-        }
+        try{
+            Connection conn = connection.getConnection();
+            Set<String> tables = _indices.get(connection);
+            if (tables.contains(table)) {
+                return conn;
+            }
 
-        Map<String, String> vars = new HashMap<>(3);
-        vars.put("indexName", table);
-        String allSqls = (String) TemplateRuntime.execute(_dynamicSql.get("create"), vars);
-        String[] sqls = allSqls.split(";");
-        String checkSql = (String) TemplateRuntime.execute(_dynamicSql.get("check"), vars);
+            Map<String, String> vars = new HashMap<>(3);
+            vars.put("indexName", table);
+            _mvelContext.put(table, Collections.unmodifiableMap(vars));
+            String allSqls = (String) TemplateRuntime.execute(_dynamicSql.get("create"), vars);
+            String[] sqls = allSqls.split(";");
+            String checkSql = (String) TemplateRuntime.execute(_dynamicSql.get("check"), vars);
 
-        try {
             Statement s = conn.createStatement();
-            s.execute(checkSql); // dumb test for table existence
-        } catch (SQLException e) {
-            for (String sql : sqls) {
-                Statement st = conn.createStatement();
-                st.executeUpdate(sql);
+            try {            
+                s.executeQuery(checkSql); // dumb test for table existence
+                s.close();
+            } catch (SQLException e) {
+                s.clearWarnings();
+                s.close();
+                conn.rollback();
+                for (String sql : sqls) {
+                    Statement st = conn.createStatement();
+                    st.executeUpdate(sql);
+                    st.close();
+                }
             }
             tables.add(table);
-            _mvelContext.put(table, Collections.unmodifiableMap(vars));
+            return conn;
         }
-        return conn;
+        catch(SQLException e){
+            throw new RuntimeException(e);                
+        }
     }
 
     @Override
@@ -150,7 +165,7 @@ public abstract class AbstractJdbcDriver implements Driver {
             sql = _getSql(indexName, "insert");
             ps = conn.prepareStatement(sql);
             ps.setString(1, key);
-            ps.setBlob(2, new ByteArrayInputStream(value));
+            ps.setString(2, _b64.encodeAsString(value));
             ps.executeUpdate();
             ps.close();
 
@@ -248,6 +263,13 @@ public abstract class AbstractJdbcDriver implements Driver {
                     context.put((String) paramsNameValue[i], paramsNameValue[++i]);
                 }
                 ret = (String) TemplateRuntime.execute(ct, context);
+                
+                if (paramsNameValue == null || paramsNameValue.length == 0) {
+                    stat = _indexStaticSql.get(queryName);
+                    synchronized (stat) {
+                        _indexStaticSql.get(queryName).put(indexName, ret);
+                    }
+                }
 
             }
         }
@@ -342,7 +364,7 @@ public abstract class AbstractJdbcDriver implements Driver {
 
             byte[] ret;
             if (rs.next()) {
-                ret = rs.getBytes(1);
+                ret = _b64.decode(rs.getString(1));
             } else {
                 ret = null;
             }
