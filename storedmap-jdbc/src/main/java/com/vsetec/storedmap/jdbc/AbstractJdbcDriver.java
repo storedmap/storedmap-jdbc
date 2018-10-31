@@ -19,7 +19,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vsetec.storedmap.Driver;
 import com.vsetec.storedmap.StoredMapException;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -80,12 +79,12 @@ public abstract class AbstractJdbcDriver implements Driver {
         properties.entrySet().forEach((entry) -> {
             ds.addConnectionProperty((String) entry.getKey(), (String) entry.getValue());
         });
-        
+
         ds.setUrl(connectionString);
         ds.setDriverClassName(properties.getProperty("storedmap.jdbc.driver"));
         ds.setUsername(properties.getProperty("storedmap.jdbc.user"));
         ds.setPassword(properties.getProperty("storedmap.jdbc.password"));
-        
+
         ds.setDefaultAutoCommit(false);
 
         _indices.put(ds, new HashSet<>());
@@ -106,7 +105,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     }
 
     private synchronized Connection _getSqlConnection(BasicDataSource connection, String table) throws SQLException {
-        try{
+        try {
             Connection conn = connection.getConnection();
             Set<String> tables = _indices.get(connection);
             if (tables.contains(table)) {
@@ -121,7 +120,7 @@ public abstract class AbstractJdbcDriver implements Driver {
             String checkSql = (String) TemplateRuntime.execute(_dynamicSql.get("check"), vars);
 
             Statement s = conn.createStatement();
-            try {            
+            try {
                 s.executeQuery(checkSql); // dumb test for table existence
                 s.close();
             } catch (SQLException e) {
@@ -136,9 +135,8 @@ public abstract class AbstractJdbcDriver implements Driver {
             }
             tables.add(table);
             return conn;
-        }
-        catch(SQLException e){
-            throw new RuntimeException(e);                
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -205,20 +203,33 @@ public abstract class AbstractJdbcDriver implements Driver {
             sql = _getSql(indexName, "insertIndex");
             ps = conn.prepareStatement(sql);
             String json = _om.writeValueAsString(map);
-            String sorterStr = _b32.encodeAsString(sorter);
+            String sorterStr;
+            if (sorter == null) {
+                sorterStr = _b32.encodeAsString(sorter);
+            } else {
+                sorterStr = null;
+            }
             if (tags != null && tags.length > 0) {
                 for (String tag : tags) {
                     ps.setString(1, key);
                     ps.setString(2, json);
                     ps.setString(3, tag);
-                    ps.setString(4, sorterStr);
+                    if (sorterStr == null) {
+                        ps.setNull(4, Types.VARCHAR);
+                    } else {
+                        ps.setString(4, sorterStr);
+                    }
                     ps.executeUpdate();
                 }
             } else {
                 ps.setString(1, key);
                 ps.setString(2, json);
-                ps.setNull(3, Types.VARCHAR);
-                ps.setString(4, sorterStr);
+                ps.setString(3, "***NULL***"); // TODO: review this magic null value
+                if (sorterStr == null) {
+                    ps.setNull(4, Types.VARCHAR);
+                } else {
+                    ps.setString(4, sorterStr);
+                }
                 ps.executeUpdate();
             }
             ps.close();
@@ -263,7 +274,7 @@ public abstract class AbstractJdbcDriver implements Driver {
                     context.put((String) paramsNameValue[i], paramsNameValue[++i]);
                 }
                 ret = (String) TemplateRuntime.execute(ct, context);
-                
+
                 if (paramsNameValue == null || paramsNameValue.length == 0) {
                     stat = _indexStaticSql.get(queryName);
                     synchronized (stat) {
