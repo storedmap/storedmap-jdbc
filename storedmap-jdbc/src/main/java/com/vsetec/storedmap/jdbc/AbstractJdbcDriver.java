@@ -168,7 +168,7 @@ public abstract class AbstractJdbcDriver implements Driver {
             ps.close();
 
             // call first callback
-            if(callbackOnIndex!=null){
+            if (callbackOnIndex != null) {
                 callbackOnIndex.run();
             }
 
@@ -239,7 +239,7 @@ public abstract class AbstractJdbcDriver implements Driver {
             conn.commit();
             conn.close();
 
-            if(callbackOnAdditionalIndex!=null){
+            if (callbackOnAdditionalIndex != null) {
                 callbackOnAdditionalIndex.run();
             }
 
@@ -513,7 +513,7 @@ public abstract class AbstractJdbcDriver implements Driver {
             conn.commit();
             conn.close();
 
-            if(callback!=null){
+            if (callback != null) {
                 callback.run();
             }
         } catch (SQLException e) {
