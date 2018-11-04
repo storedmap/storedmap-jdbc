@@ -168,7 +168,9 @@ public abstract class AbstractJdbcDriver implements Driver {
             ps.close();
 
             // call first callback
-            callbackOnIndex.run();
+            if(callbackOnIndex!=null){
+                callbackOnIndex.run();
+            }
 
             conn.commit();
             conn.close();
@@ -237,7 +239,9 @@ public abstract class AbstractJdbcDriver implements Driver {
             conn.commit();
             conn.close();
 
-            callbackOnAdditionalIndex.run();
+            if(callbackOnAdditionalIndex!=null){
+                callbackOnAdditionalIndex.run();
+            }
 
         } catch (SQLException | JsonProcessingException e) {
             throw new RuntimeException(e);
@@ -509,7 +513,9 @@ public abstract class AbstractJdbcDriver implements Driver {
             conn.commit();
             conn.close();
 
-            callback.run();
+            if(callback!=null){
+                callback.run();
+            }
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
