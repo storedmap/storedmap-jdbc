@@ -17,6 +17,7 @@ package com.vsetec.storedmap.jdbc;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.vsetec.storedmap.Driver;
 import com.vsetec.storedmap.StoredMapException;
 import java.io.IOException;
@@ -50,6 +51,9 @@ public abstract class AbstractJdbcDriver implements Driver {
     private final Base32 _b32 = new Base32(true);
     private final Base64 _b64 = new Base64();
     private final ObjectMapper _om = new ObjectMapper();
+    {
+        _om.configure(SerializationFeature.INDENT_OUTPUT, true);
+    }
     private final Map<BasicDataSource, Set<String>> _indices = new HashMap<>();
     private final Map<String, Map<String, Object>> _mvelContext = new HashMap<>();
     private final Map<String, CompiledTemplate> _dynamicSql = new HashMap<>();
