@@ -51,6 +51,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     private final Base32 _b32 = new Base32(true);
     private final Base64 _b64 = new Base64();
     private final ObjectMapper _om = new ObjectMapper();
+
     {
         _om.configure(SerializationFeature.INDENT_OUTPUT, true);
     }
