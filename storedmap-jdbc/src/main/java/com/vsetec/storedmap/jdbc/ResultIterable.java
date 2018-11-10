@@ -42,7 +42,11 @@ public class ResultIterable implements Iterable<String>, Closeable {
 
     @Override
     protected void finalize() throws Throwable {
-        this.close();
+        try {
+            this.close();
+        } finally {
+            super.finalize();
+        }
     }
 
     @Override
