@@ -170,6 +170,7 @@ public abstract class AbstractJdbcDriver implements Driver {
             ps.setString(1, key);
             ps.setString(2, _b64.encodeAsString(value));
             ps.executeUpdate();
+            //System.out.println("inserted main, key " + key);
             ps.close();
 
             // call first callback
@@ -211,7 +212,7 @@ public abstract class AbstractJdbcDriver implements Driver {
             ps = conn.prepareStatement(sql);
             String json = _om.writeValueAsString(map);
             String sorterStr;
-            if (sorter == null) {
+            if (sorter != null) {
                 sorterStr = _b32.encodeAsString(sorter);
             } else {
                 sorterStr = null;
@@ -227,6 +228,7 @@ public abstract class AbstractJdbcDriver implements Driver {
                         ps.setString(4, sorterStr);
                     }
                     ps.executeUpdate();
+                    //System.out.println("inserted tagged indx, key " + key + ", sorter " + sorterStr + ", tag " + tag + ", json " + json);                    
                 }
             } else {
                 ps.setString(1, key);
@@ -238,6 +240,7 @@ public abstract class AbstractJdbcDriver implements Driver {
                     ps.setString(4, sorterStr);
                 }
                 ps.executeUpdate();
+                //System.out.println("inserted untagged indx, key " + key + ", sorter " + sorterStr + ", json " + json);
             }
             ps.close();
 
