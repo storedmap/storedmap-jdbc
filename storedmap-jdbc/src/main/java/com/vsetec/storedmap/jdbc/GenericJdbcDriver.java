@@ -16,6 +16,7 @@
 package com.vsetec.storedmap.jdbc;
 
 import java.util.Collections;
+import org.apache.commons.dbcp.BasicDataSource;
 
 /**
  *
@@ -44,23 +45,23 @@ public class GenericJdbcDriver extends AbstractJdbcDriver {
     }
 
     @Override
-    public Iterable<String> get(String indexName, Object connection, String textQuery) {
+    public Iterable<String> get(String indexName, BasicDataSource ds, String textQuery) {
         return Collections.EMPTY_LIST;
     }
 
     @Override
-    public Iterable<String> get(String indexName, Object connection, String textQuery, String[] anyOfTags) {
-        return get(indexName, connection, anyOfTags);
+    public Iterable<String> get(String indexName, BasicDataSource ds, String textQuery, String[] anyOfTags) {
+        return get(indexName, ds, anyOfTags);
     }
 
     @Override
-    public Iterable<String> get(String indexName, Object connection, String textQuery, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending) {
-        return get(indexName, connection, minSorter, maxSorter, anyOfTags, ascending);
+    public Iterable<String> get(String indexName, BasicDataSource ds, String textQuery, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending) {
+        return get(indexName, ds, minSorter, maxSorter, anyOfTags, ascending);
     }
 
     @Override
-    public Iterable<String> get(String indexName, Object connection, String textQuery, byte[] minSorter, byte[] maxSorter, boolean ascending) {
-        return get(indexName, connection, minSorter, maxSorter, ascending);
+    public Iterable<String> get(String indexName, BasicDataSource ds, String textQuery, byte[] minSorter, byte[] maxSorter, boolean ascending) {
+        return get(indexName, ds, minSorter, maxSorter, ascending);
     }
 
 }

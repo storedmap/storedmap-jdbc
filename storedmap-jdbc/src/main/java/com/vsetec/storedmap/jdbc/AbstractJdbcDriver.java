@@ -35,6 +35,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import javax.sql.DataSource;
 import org.apache.commons.codec.binary.Base32;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.dbcp.BasicDataSource;
@@ -46,7 +47,7 @@ import org.mvel2.templates.TemplateRuntime;
  *
  * @author Fyodor Kravchenko <fedd@vsetec.com>
  */
-public abstract class AbstractJdbcDriver implements Driver {
+public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
 
     private final Base32 _b32 = new Base32(true);
     private final Base64 _b64 = new Base64();
@@ -61,7 +62,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     private final Map<String, Map<String, String>> _indexStaticSql = new HashMap<>();
 
     @Override
-    public Object openConnection(String connectionString, Properties properties) {
+    public BasicDataSource openConnection(String connectionString, Properties properties) {
 
         Properties sqlProps = new Properties();
         try {
@@ -106,9 +107,8 @@ public abstract class AbstractJdbcDriver implements Driver {
     }
 
     @Override
-    public void closeConnection(Object connection) {
+    public void closeConnection(BasicDataSource ds) {
         try {
-            BasicDataSource ds = (BasicDataSource) connection;
             _indices.remove(ds);
             ds.close();
         } catch (SQLException e) {
@@ -156,11 +156,10 @@ public abstract class AbstractJdbcDriver implements Driver {
     public void put(
             String key,
             String indexName,
-            Object connection,
+            BasicDataSource ds,
             byte[] value,
             Runnable callbackOnIndex) {
 
-        BasicDataSource ds = (BasicDataSource) connection;
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
@@ -197,14 +196,13 @@ public abstract class AbstractJdbcDriver implements Driver {
     public void put(
             String key,
             String indexName,
-            Object connection,
+            BasicDataSource ds,
             Map<String, Object> map,
             Locale[] locales,
             byte[] sorter,
             String[] tags,
             Runnable callbackOnAdditionalIndex) {
 
-        BasicDataSource ds = (BasicDataSource) connection;
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
@@ -309,8 +307,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     }
 
     @Override
-    public int tryLock(String key, String indexName, Object connection, int milliseconds) {
-        BasicDataSource ds = (BasicDataSource) connection;
+    public int tryLock(String key, String indexName, BasicDataSource ds, int milliseconds) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
             String sql = _getSql(indexName, "selectLock");
@@ -366,8 +363,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     }
 
     @Override
-    public void unlock(String key, String indexName, Object connection) {
-        BasicDataSource ds = (BasicDataSource) connection;
+    public void unlock(String key, String indexName, BasicDataSource ds) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
             String sql = _getSql(indexName, "deleteLock");
@@ -383,8 +379,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     }
 
     @Override
-    public byte[] get(String key, String indexName, Object connection) {
-        BasicDataSource ds = (BasicDataSource) connection;
+    public byte[] get(String key, String indexName, BasicDataSource ds) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
@@ -412,8 +407,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     }
 
     @Override
-    public Iterable<String> get(String indexName, Object connection) {
-        BasicDataSource ds = (BasicDataSource) connection;
+    public Iterable<String> get(String indexName, BasicDataSource ds) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
@@ -429,8 +423,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     }
 
     @Override
-    public Iterable<String> get(String indexName, Object connection, String[] anyOfTags) {
-        BasicDataSource ds = (BasicDataSource) connection;
+    public Iterable<String> get(String indexName, BasicDataSource ds, String[] anyOfTags) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectById", "tags", anyOfTags));
@@ -450,8 +443,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     }
 
     @Override
-    public Iterable<String> get(String indexName, Object connection, byte[] minSorter, byte[] maxSorter, boolean ascending) {
-        BasicDataSource ds = (BasicDataSource) connection;
+    public Iterable<String> get(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, boolean ascending) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
@@ -476,8 +468,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     }
 
     @Override
-    public Iterable<String> get(String indexName, Object connection, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending) {
-        BasicDataSource ds = (BasicDataSource) connection;
+    public Iterable<String> get(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
@@ -508,8 +499,7 @@ public abstract class AbstractJdbcDriver implements Driver {
     }
 
     @Override
-    public void remove(String key, String indexName, Object connection, Runnable callback) {
-        BasicDataSource ds = (BasicDataSource) connection;
+    public void remove(String key, String indexName, BasicDataSource ds, Runnable callback) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
