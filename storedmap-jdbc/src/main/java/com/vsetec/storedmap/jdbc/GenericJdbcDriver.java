@@ -26,7 +26,7 @@ public class GenericJdbcDriver extends AbstractJdbcDriver {
 
     @Override
     public int getMaximumIndexNameLength() {
-        return 200;
+        return 60;
     }
 
     @Override

@@ -143,6 +143,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
                     st.executeUpdate(sql);
                     st.close();
                 }
+                conn.commit();
             }
             tables.add(table);
             return conn;
