@@ -35,7 +35,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import javax.sql.DataSource;
 import org.apache.commons.codec.binary.Base32;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.dbcp.BasicDataSource;
@@ -62,7 +61,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     private final Map<String, Map<String, String>> _indexStaticSql = new HashMap<>();
 
     @Override
-    public BasicDataSource openConnection(String connectionString, Properties properties) {
+    public BasicDataSource openConnection(Properties properties) {
 
         Properties sqlProps = new Properties();
         try {
@@ -82,18 +81,18 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
 
         BasicDataSource ds = new BasicDataSource();
 
-        for(Map.Entry entry: properties.entrySet()){
+        for (Map.Entry entry : properties.entrySet()) {
             String propertyName = (String) entry.getKey();
-            if(propertyName.startsWith("storedmap.jdbc.")){
+            if (propertyName.startsWith("storedmap.jdbc.")) {
                 propertyName = propertyName.substring("storedmap.jdbc.".length());
-                if(propertyName.equals("driver") || propertyName.equals("user")||propertyName.equals("password")){
+                if (propertyName.equals("driver") || propertyName.equals("user") || propertyName.equals("password")) {
                     continue;
                 }
             }
             ds.addConnectionProperty(propertyName, (String) entry.getValue());
         }
 
-        ds.setUrl(connectionString);
+        ds.setUrl(properties.getProperty("storedmap.jdbc.url"));
         ds.setDriverClassName(properties.getProperty("storedmap.jdbc.driver"));
         ds.setUsername(properties.getProperty("storedmap.jdbc.user"));
         ds.setPassword(properties.getProperty("storedmap.jdbc.password"));
