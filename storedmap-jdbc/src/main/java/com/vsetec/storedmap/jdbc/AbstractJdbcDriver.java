@@ -179,9 +179,15 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             String indexName,
             BasicDataSource ds,
             byte[] value,
-            Runnable callbackOnIndex) {
+            Runnable callbackBeforeIndex,
+            Runnable callbackAfterIndex) {
 
         try { // TODO: convert all to try with resources
+
+            if (callbackBeforeIndex != null) {
+                callbackBeforeIndex.run();
+            }
+
             Connection conn = _getSqlConnection(ds, indexName);
 
             // first remove all
@@ -200,9 +206,9 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             //System.out.println("inserted main, key " + key);
             ps.close();
 
-            // call first callback
-            if (callbackOnIndex != null) {
-                callbackOnIndex.run();
+            // call callback
+            if (callbackAfterIndex != null) {
+                callbackAfterIndex.run();
             }
 
             conn.commit();
