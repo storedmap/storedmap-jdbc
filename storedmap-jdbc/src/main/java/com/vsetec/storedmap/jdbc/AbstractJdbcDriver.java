@@ -201,7 +201,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             sql = _getSql(indexName, "insert");
             ps = conn.prepareStatement(sql);
             ps.setString(1, key);
-            ps.setString(2, _b64.encodeAsString(value));
+            ps.setBytes(2, value);
             ps.executeUpdate();
             //System.out.println("inserted main, key " + key);
             ps.close();
@@ -416,7 +416,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
 
             byte[] ret;
             if (rs.next()) {
-                ret = _b64.decode(rs.getString(1));
+                ret = rs.getBytes(1);
             } else {
                 ret = null;
             }
