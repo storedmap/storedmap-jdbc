@@ -25,22 +25,22 @@ import org.apache.commons.dbcp.BasicDataSource;
 public class GenericJdbcDriver extends AbstractJdbcDriver {
 
     @Override
-    public int getMaximumIndexNameLength() {
+    public int getMaximumIndexNameLength(BasicDataSource ds) {
         return 60;
     }
 
     @Override
-    public int getMaximumKeyLength() {
+    public int getMaximumKeyLength(BasicDataSource ds) {
         return 200;
     }
 
     @Override
-    public int getMaximumTagLength() {
+    public int getMaximumTagLength(BasicDataSource ds) {
         return 200;
     }
 
     @Override
-    public int getMaximumSorterLength() {
+    public int getMaximumSorterLength(BasicDataSource ds) {
         return 200;
     }
 
