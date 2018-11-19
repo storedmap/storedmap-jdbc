@@ -64,4 +64,24 @@ public class GenericJdbcDriver extends AbstractJdbcDriver {
         return get(indexName, ds, minSorter, maxSorter, ascending);
     }
 
+    @Override
+    public Iterable<String> get(String indexName, BasicDataSource connection, String textQuery, int from, int size) {
+        return Collections.EMPTY_LIST;
+    }
+
+    @Override
+    public Iterable<String> get(String indexName, BasicDataSource connection, String textQuery, String[] anyOfTags, int from, int size) {
+        return get(indexName, connection, anyOfTags, from, size);
+    }
+
+    @Override
+    public Iterable<String> get(String indexName, BasicDataSource connection, String textQuery, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending, int from, int size) {
+        return get(indexName, connection, minSorter, maxSorter, anyOfTags, ascending, from, size);
+    }
+
+    @Override
+    public Iterable<String> get(String indexName, BasicDataSource connection, String textQuery, byte[] minSorter, byte[] maxSorter, boolean ascending, int from, int size) {
+        return get(indexName, connection, minSorter, maxSorter, ascending, from, size);
+    }
+
 }

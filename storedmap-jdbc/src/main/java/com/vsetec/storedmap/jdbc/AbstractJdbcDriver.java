@@ -452,14 +452,14 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     }
 
     @Override
-    public Iterable<String> get(String indexName, BasicDataSource ds) {
+    public Iterable<String> get(String indexName, BasicDataSource ds, int from, int size) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectAll"));
             ResultSet rs = ps.executeQuery();
 
-            ResultIterable ri = new ResultIterable(conn, rs, ps);
+            ResultIterable ri = new ResultIterable(conn, rs, ps, from, size);
 
             return ri;
         } catch (SQLException e) {
@@ -468,7 +468,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     }
 
     @Override
-    public Iterable<String> get(String indexName, BasicDataSource ds, String[] anyOfTags) {
+    public Iterable<String> get(String indexName, BasicDataSource ds, String[] anyOfTags, int from, int size) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectById", "tags", anyOfTags));
@@ -479,7 +479,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
 
             ResultSet rs = ps.executeQuery();
 
-            ResultIterable ri = new ResultIterable(conn, rs, ps);
+            ResultIterable ri = new ResultIterable(conn, rs, ps, from, size);
 
             return ri;
         } catch (SQLException e) {
@@ -488,7 +488,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     }
 
     @Override
-    public Iterable<String> get(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, boolean ascending) {
+    public Iterable<String> get(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, boolean ascending, int from, int size) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
@@ -504,7 +504,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             }
             ResultSet rs = ps.executeQuery();
 
-            ResultIterable ri = new ResultIterable(conn, rs, ps);
+            ResultIterable ri = new ResultIterable(conn, rs, ps, from, size);
 
             return ri;
         } catch (SQLException e) {
@@ -513,7 +513,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     }
 
     @Override
-    public Iterable<String> get(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending) {
+    public Iterable<String> get(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending, int from, int size) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
@@ -535,7 +535,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
 
             ResultSet rs = ps.executeQuery();
 
-            ResultIterable ri = new ResultIterable(conn, rs, ps);
+            ResultIterable ri = new ResultIterable(conn, rs, ps, from, size);
 
             return ri;
         } catch (SQLException e) {
@@ -569,6 +569,26 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public Iterable<String> get(String indexName, BasicDataSource connection) {
+        return get(indexName, connection, 0, Integer.MAX_VALUE);
+    }
+
+    @Override
+    public Iterable<String> get(String indexName, BasicDataSource connection, String[] anyOfTags) {
+        return get(indexName, connection, anyOfTags, 0, Integer.MAX_VALUE);
+    }
+
+    @Override
+    public Iterable<String> get(String indexName, BasicDataSource connection, byte[] minSorter, byte[] maxSorter, boolean ascending) {
+        return get(indexName, connection, minSorter, maxSorter, ascending, 0, Integer.MAX_VALUE);
+    }
+
+    @Override
+    public Iterable<String> get(String indexName, BasicDataSource connection, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending) {
+        return get(indexName, connection, minSorter, maxSorter, anyOfTags, ascending, 0, Integer.MAX_VALUE);
     }
 
 }

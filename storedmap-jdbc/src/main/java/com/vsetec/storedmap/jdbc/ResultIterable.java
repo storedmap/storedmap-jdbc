@@ -33,11 +33,27 @@ public class ResultIterable implements Iterable<String>, Closeable {
     private final PreparedStatement _ps;
     private final ResultSet _rs;
     private final Connection _conn;
+    private final int _stopAt;
 
     public ResultIterable(Connection conn, ResultSet rs, PreparedStatement ps) {
         _conn = conn;
         _rs = rs;
         _ps = ps;
+        _stopAt = Integer.MAX_VALUE;
+    }
+
+    public ResultIterable(Connection conn, ResultSet rs, PreparedStatement ps, int skip, int size) {
+        _conn = conn;
+        _rs = rs;
+        _ps = ps;
+        _stopAt = size;
+        try {
+            for (int i = 0; i < skip; i++) {
+                _rs.next();
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -53,6 +69,7 @@ public class ResultIterable implements Iterable<String>, Closeable {
     public Iterator<String> iterator() {
         return new Iterator<String>() {
 
+            private int _i = 0;
             private boolean _endReached = false;
             private boolean _nextLoaded = false;
             private String _next = null;
@@ -69,7 +86,8 @@ public class ResultIterable implements Iterable<String>, Closeable {
 
                     _nextLoaded = true;
                     try {
-                        _endReached = !_rs.next();
+                        _endReached = _i >= _stopAt || !_rs.next();
+                        _i++;
                         if (_endReached) {
                             _next = null;
                             ResultIterable.this.close();
