@@ -22,12 +22,14 @@ import com.vsetec.storedmap.Driver;
 import com.vsetec.storedmap.StoredMapException;
 import java.io.IOException;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -145,6 +147,34 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             ds.close();
         } catch (SQLException e) {
             throw new StoredMapException("Couldn'c close the connection", e);
+        }
+    }
+
+    @Override
+    public Iterable<String> getIndices(BasicDataSource connection) {
+        try {
+            HashSet<String> tables = new HashSet<>();
+            Connection conn = connection.getConnection();
+            DatabaseMetaData md = conn.getMetaData();
+            ResultSet rs = md.getTables(null, null, "%", null);
+            while (rs.next()) {
+                String indexCandidate = rs.getString(3);
+                int strPos = -1;
+                if ((strPos = indexCandidate.indexOf("_main")) > 0) {
+                    indexCandidate = indexCandidate.substring(0, strPos);
+                } else if ((strPos = indexCandidate.indexOf("_lock")) > 0) {
+                    indexCandidate = indexCandidate.substring(0, strPos);
+                } else if ((strPos = indexCandidate.indexOf("_indx")) > 0) {
+                    indexCandidate = indexCandidate.substring(0, strPos);
+                }
+                if (strPos > 0) {
+                    tables.add(indexCandidate);
+                }
+            }
+            rs.close();
+            return tables;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
     }
 
