@@ -29,7 +29,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.sql.Types;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -501,7 +500,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     public Iterable<String> get(String indexName, BasicDataSource ds, String[] anyOfTags, int from, int size) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
-            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectById", "tags", anyOfTags));
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTags", "tags", anyOfTags));
 
             for (int i = 0; i < anyOfTags.length; i++) {
                 ps.setString(i + 1, anyOfTags[i]);
@@ -522,7 +521,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
-            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTags", "minSorter", minSorter, "maxSorter", maxSorter, "ascending", ascending));
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectFilterSorted", "minSorter", minSorter, "maxSorter", maxSorter, "ascending", ascending));
             int i = 1;
             if (minSorter != null) {
                 ps.setString(i, _b32.encodeAsString(minSorter));
@@ -547,7 +546,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
-            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTags", "tags", anyOfTags, "minSorter", minSorter, "maxSorter", maxSorter, "ascending", ascending));
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTagsAndFilterSorted", "tags", anyOfTags, "minSorter", minSorter, "maxSorter", maxSorter, "ascending", ascending));
             int i = 1;
             if (minSorter != null) {
                 ps.setString(i, _b32.encodeAsString(minSorter));
@@ -602,6 +601,29 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     }
 
     @Override
+    public void removeAll(String indexName, BasicDataSource connection) {
+        try { // TODO: convert all to try with resources
+            Connection conn = _getSqlConnection(connection, indexName);
+
+            String[] allSqls = _getSql(indexName, "deleteAll").split(";");
+
+            PreparedStatement ps = conn.prepareStatement(allSqls[0]);
+            ps.executeUpdate();
+            ps.close();
+
+            ps = conn.prepareStatement(allSqls[1]);
+            ps.executeUpdate();
+            ps.close();
+
+            conn.commit();
+            conn.close();
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
     public Iterable<String> get(String indexName, BasicDataSource connection) {
         return get(indexName, connection, 0, Integer.MAX_VALUE);
     }
@@ -619,6 +641,101 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     @Override
     public Iterable<String> get(String indexName, BasicDataSource connection, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending) {
         return get(indexName, connection, minSorter, maxSorter, anyOfTags, ascending, 0, Integer.MAX_VALUE);
+    }
+
+    @Override
+    public int count(String indexName, BasicDataSource ds) {
+        try { // TODO: convert all to try with resources
+            Connection conn = _getSqlConnection(ds, indexName);
+
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "countAll"));
+            ResultSet rs = ps.executeQuery();
+            rs.next();
+            int ret = rs.getInt(1);
+            rs.close();
+            return ret;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public int count(String indexName, BasicDataSource ds, String[] anyOfTags) {
+        try { // TODO: convert all to try with resources
+            Connection conn = _getSqlConnection(ds, indexName);
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "countByTags", "tags", anyOfTags));
+
+            for (int i = 0; i < anyOfTags.length; i++) {
+                ps.setString(i + 1, anyOfTags[i]);
+            }
+
+            ResultSet rs = ps.executeQuery();
+            rs.next();
+            int ret = rs.getInt(1);
+            rs.close();
+            return ret;
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public int count(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter) {
+        try { // TODO: convert all to try with resources
+            Connection conn = _getSqlConnection(ds, indexName);
+
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "countFiltered", "minSorter", minSorter, "maxSorter", maxSorter));
+            int i = 1;
+            if (minSorter != null) {
+                ps.setString(i, _b32.encodeAsString(minSorter));
+                i++;
+            }
+            if (maxSorter != null) {
+                ps.setString(i, _b32.encodeAsString(maxSorter));
+                i++;
+            }
+            ResultSet rs = ps.executeQuery();
+            rs.next();
+            int ret = rs.getInt(1);
+            rs.close();
+            return ret;
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public int count(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, String[] anyOfTags) {
+        try { // TODO: convert all to try with resources
+            Connection conn = _getSqlConnection(ds, indexName);
+
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "countByTagsAndFiltered", "tags", anyOfTags, "minSorter", minSorter, "maxSorter", maxSorter));
+            int i = 1;
+            if (minSorter != null) {
+                ps.setString(i, _b32.encodeAsString(minSorter));
+                i++;
+            }
+            if (maxSorter != null) {
+                ps.setString(i, _b32.encodeAsString(maxSorter));
+                i++;
+            }
+
+            for (String tag : anyOfTags) {
+                ps.setString(i, tag);
+                i++;
+            }
+
+            ResultSet rs = ps.executeQuery();
+            rs.next();
+            int ret = rs.getInt(1);
+            rs.close();
+            return ret;
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 }

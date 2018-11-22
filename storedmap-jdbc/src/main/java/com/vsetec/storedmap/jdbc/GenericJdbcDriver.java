@@ -15,10 +15,13 @@
  */
 package com.vsetec.storedmap.jdbc;
 
+import com.vsetec.storedmap.Driver;
 import java.util.Collections;
 import org.apache.commons.dbcp.BasicDataSource;
 
 /**
+ * A generic implementation of a JDBC StoredMap {@link Driver} that totally
+ * ignores the full text query
  *
  * @author Fyodor Kravchenko <fedd@vsetec.com>
  */
@@ -82,6 +85,26 @@ public class GenericJdbcDriver extends AbstractJdbcDriver {
     @Override
     public Iterable<String> get(String indexName, BasicDataSource connection, String textQuery, byte[] minSorter, byte[] maxSorter, boolean ascending, int from, int size) {
         return get(indexName, connection, minSorter, maxSorter, ascending, from, size);
+    }
+
+    @Override
+    public int count(String indexName, BasicDataSource connection, String textQuery) {
+        return 0;
+    }
+
+    @Override
+    public int count(String indexName, BasicDataSource connection, String textQuery, String[] anyOfTags) {
+        return count(indexName, connection, anyOfTags);
+    }
+
+    @Override
+    public int count(String indexName, BasicDataSource connection, String textQuery, byte[] minSorter, byte[] maxSorter, String[] anyOfTags) {
+        return count(indexName, connection, minSorter, maxSorter, anyOfTags);
+    }
+
+    @Override
+    public int count(String indexName, BasicDataSource connection, String textQuery, byte[] minSorter, byte[] maxSorter) {
+        return count(indexName, connection, minSorter, maxSorter);
     }
 
 }
