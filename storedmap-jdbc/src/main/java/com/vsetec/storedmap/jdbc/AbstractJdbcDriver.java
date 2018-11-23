@@ -171,6 +171,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
                 }
             }
             rs.close();
+            conn.close();
             return tables;
         } catch (SQLException e) {
             throw new RuntimeException(e);

@@ -123,6 +123,7 @@ public class ResultIterable implements Iterable<String>, Closeable {
                 _conn.commit();
                 _rs.close();
                 _ps.close();
+                _conn.close();
             }
         } catch (SQLException e) {
             throw new IOException(e);
