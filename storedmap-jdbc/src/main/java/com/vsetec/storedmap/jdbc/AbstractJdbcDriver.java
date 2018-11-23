@@ -644,14 +644,14 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     }
 
     @Override
-    public int count(String indexName, BasicDataSource ds) {
+    public long count(String indexName, BasicDataSource ds) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "countAll"));
             ResultSet rs = ps.executeQuery();
             rs.next();
-            int ret = rs.getInt(1);
+            long ret = rs.getLong(1);
             rs.close();
             return ret;
         } catch (SQLException e) {
@@ -660,7 +660,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     }
 
     @Override
-    public int count(String indexName, BasicDataSource ds, String[] anyOfTags) {
+    public long count(String indexName, BasicDataSource ds, String[] anyOfTags) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "countByTags", "tags", anyOfTags));
@@ -671,7 +671,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
 
             ResultSet rs = ps.executeQuery();
             rs.next();
-            int ret = rs.getInt(1);
+            long ret = rs.getLong(1);
             rs.close();
             return ret;
 
@@ -681,7 +681,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     }
 
     @Override
-    public int count(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter) {
+    public long count(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
@@ -697,7 +697,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             }
             ResultSet rs = ps.executeQuery();
             rs.next();
-            int ret = rs.getInt(1);
+            long ret = rs.getLong(1);
             rs.close();
             return ret;
 
@@ -707,7 +707,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     }
 
     @Override
-    public int count(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, String[] anyOfTags) {
+    public long count(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, String[] anyOfTags) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
@@ -729,7 +729,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
 
             ResultSet rs = ps.executeQuery();
             rs.next();
-            int ret = rs.getInt(1);
+            long ret = rs.getLong(1);
             rs.close();
             return ret;
 

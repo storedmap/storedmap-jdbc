@@ -88,22 +88,22 @@ public class GenericJdbcDriver extends AbstractJdbcDriver {
     }
 
     @Override
-    public int count(String indexName, BasicDataSource connection, String textQuery) {
+    public long count(String indexName, BasicDataSource connection, String textQuery) {
         return 0;
     }
 
     @Override
-    public int count(String indexName, BasicDataSource connection, String textQuery, String[] anyOfTags) {
+    public long count(String indexName, BasicDataSource connection, String textQuery, String[] anyOfTags) {
         return count(indexName, connection, anyOfTags);
     }
 
     @Override
-    public int count(String indexName, BasicDataSource connection, String textQuery, byte[] minSorter, byte[] maxSorter, String[] anyOfTags) {
+    public long count(String indexName, BasicDataSource connection, String textQuery, byte[] minSorter, byte[] maxSorter, String[] anyOfTags) {
         return count(indexName, connection, minSorter, maxSorter, anyOfTags);
     }
 
     @Override
-    public int count(String indexName, BasicDataSource connection, String textQuery, byte[] minSorter, byte[] maxSorter) {
+    public long count(String indexName, BasicDataSource connection, String textQuery, byte[] minSorter, byte[] maxSorter) {
         return count(indexName, connection, minSorter, maxSorter);
     }
 
