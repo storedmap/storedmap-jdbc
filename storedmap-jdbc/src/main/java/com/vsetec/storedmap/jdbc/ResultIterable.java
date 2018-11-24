@@ -35,16 +35,18 @@ public class ResultIterable implements Iterable<String>, Closeable {
     private final Connection _conn;
     private final int _stopAt;
 
-    public ResultIterable(Connection conn, ResultSet rs, PreparedStatement ps) {
+    public ResultIterable(Connection conn, PreparedStatement ps) throws SQLException {
         _conn = conn;
-        _rs = rs;
+        _rs = ps.executeQuery();
+        //System.out.println("Resultset opened");
         _ps = ps;
         _stopAt = Integer.MAX_VALUE;
     }
 
-    public ResultIterable(Connection conn, ResultSet rs, PreparedStatement ps, int skip, int size) {
+    public ResultIterable(Connection conn, PreparedStatement ps, int skip, int size) throws SQLException {
         _conn = conn;
-        _rs = rs;
+        _rs = ps.executeQuery();
+        //System.out.println("Resultset opened");
         _ps = ps;
         _stopAt = size;
         try {
@@ -124,6 +126,8 @@ public class ResultIterable implements Iterable<String>, Closeable {
                 _rs.close();
                 _ps.close();
                 _conn.close();
+
+                //System.out.println("Resultset closed, conection released");
             }
         } catch (SQLException e) {
             throw new IOException(e);

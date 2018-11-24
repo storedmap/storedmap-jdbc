@@ -16,9 +16,7 @@
 package com.vsetec.storedmap.jdbc;
 
 import com.vsetec.storedmap.Driver;
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
-import org.apache.commons.codec.binary.Base32;
 import org.apache.commons.dbcp.BasicDataSource;
 
 /**
@@ -28,20 +26,6 @@ import org.apache.commons.dbcp.BasicDataSource;
  * @author Fyodor Kravchenko <fedd@vsetec.com>
  */
 public class GenericJdbcDriver extends AbstractJdbcDriver {
-
-    private final int _maxSorterLength;
-
-    {
-        // TODO: review this hacky way to know the longest sorter length
-        char[] longestChars = new char[200];
-        for (int i = 0; i < longestChars.length; i++) {
-            longestChars[i] = 'Z';
-        }
-        String longestString = new String(longestChars);
-        Base32 b32 = new Base32(true);
-        String encoded = b32.encodeAsString(longestString.getBytes(StandardCharsets.UTF_8));
-        _maxSorterLength = encoded.length();
-    }
 
     @Override
     public int getMaximumIndexNameLength(BasicDataSource ds) {
@@ -60,7 +44,7 @@ public class GenericJdbcDriver extends AbstractJdbcDriver {
 
     @Override
     public int getMaximumSorterLength(BasicDataSource ds) {
-        return _maxSorterLength;
+        return 60;
     }
 
     @Override

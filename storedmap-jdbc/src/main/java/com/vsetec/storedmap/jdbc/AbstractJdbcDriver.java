@@ -39,7 +39,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import org.apache.commons.codec.binary.Base32;
 import org.apache.commons.dbcp.BasicDataSource;
 import org.mvel2.templates.CompiledTemplate;
 import org.mvel2.templates.TemplateCompiler;
@@ -51,7 +50,7 @@ import org.mvel2.templates.TemplateRuntime;
  */
 public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
 
-    private final Base32 _b32 = new Base32(true);
+    //private final Base32 _b32 = new Base32(true);
     private final ObjectMapper _om = new ObjectMapper();
 
     {
@@ -154,10 +153,11 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         try {
             HashSet<String> tables = new HashSet<>();
             Connection conn = connection.getConnection();
+            //System.out.println("Got connection for metadata");
             DatabaseMetaData md = conn.getMetaData();
             ResultSet rs = md.getTables(null, null, "%", null);
             while (rs.next()) {
-                String indexCandidate = rs.getString(3);
+                String indexCandidate = rs.getString(3).toLowerCase();
                 int strPos = -1;
                 if ((strPos = indexCandidate.indexOf("_main")) > 0) {
                     indexCandidate = indexCandidate.substring(0, strPos);
@@ -172,44 +172,53 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             }
             rs.close();
             conn.close();
+            // System.out.println("Closed connection for metadata");
             return tables;
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private synchronized Connection _getSqlConnection(BasicDataSource connection, String table) throws SQLException {
+    private Connection _getSqlConnection(BasicDataSource connection, String table) throws SQLException {
         try {
-            Connection conn = connection.getConnection();
-            Set<String> tables = _indices.get(connection);
-            if (tables.contains(table)) {
-                return conn;
-            }
+            synchronized (this) {
 
-            Map<String, String> vars = new HashMap<>(3);
-            vars.put("indexName", table);
-            _mvelContext.put(table, Collections.unmodifiableMap(vars));
-            String allSqls = (String) TemplateRuntime.execute(_dynamicSql.get("create"), vars);
-            String[] sqls = allSqls.split(";");
-            String checkSql = (String) TemplateRuntime.execute(_dynamicSql.get("check"), vars);
+                Set<String> tables = _indices.get(connection);
+                boolean ok = tables.contains(table);
 
-            Statement s = conn.createStatement();
-            try {
-                s.executeQuery(checkSql); // dumb test for table existence
-                s.close();
-            } catch (SQLException e) {
-                s.clearWarnings();
-                s.close();
-                conn.rollback();
-                for (String sql : sqls) {
-                    Statement st = conn.createStatement();
-                    st.executeUpdate(sql);
-                    st.close();
+                if (!ok) {
+                    Map<String, String> vars = new HashMap<>(3);
+                    vars.put("indexName", table);
+                    _mvelContext.put(table, Collections.unmodifiableMap(vars));
+                    String allSqls = (String) TemplateRuntime.execute(_dynamicSql.get("create"), vars);
+                    String[] sqls = allSqls.split(";");
+                    String checkSql = (String) TemplateRuntime.execute(_dynamicSql.get("check"), vars);
+
+                    Connection conn = connection.getConnection();
+                    //System.out.println("Got connection for create table");
+                    Statement s = conn.createStatement();
+                    try {
+                        s.executeQuery(checkSql); // dumb test for table existence
+                        s.close();
+                    } catch (SQLException e) {
+                        s.clearWarnings();
+                        s.close();
+                        conn.rollback();
+                        for (String sql : sqls) {
+                            Statement st = conn.createStatement();
+                            st.executeUpdate(sql);
+                            st.close();
+                        }
+                        conn.commit();
+                    }
+                    tables.add(table);
+                    return conn;
                 }
-                conn.commit();
             }
-            tables.add(table);
-            return conn;
+
+            //System.out.println("Preparing to get just a connection");
+            return connection.getConnection();
+
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -251,13 +260,14 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
                     //System.out.println("inserted main, key " + key);
                     ps.close();
 
+                    conn.commit();
+                    conn.close();
+                    //System.out.println("Closed connection for regular put");
+
                     // call callback
                     if (callbackAfterIndex != null) {
                         callbackAfterIndex.run();
                     }
-
-                    conn.commit();
-                    conn.close();
 
                 } catch (SQLException e) {
                     throw new RuntimeException(e);
@@ -291,21 +301,15 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             sql = _getSql(indexName, "insertIndex");
             ps = conn.prepareStatement(sql);
             String json = _om.writeValueAsString(map);
-            String sorterStr;
-            if (sorter != null) {
-                sorterStr = _b32.encodeAsString(sorter);
-            } else {
-                sorterStr = null;
-            }
             if (tags != null && tags.length > 0) {
                 for (String tag : tags) {
                     ps.setString(1, key);
                     ps.setString(2, json);
                     ps.setString(3, tag);
-                    if (sorterStr == null) {
-                        ps.setNull(4, Types.VARCHAR);
+                    if (sorter == null) {
+                        ps.setNull(4, Types.BINARY);
                     } else {
-                        ps.setString(4, sorterStr);
+                        ps.setBytes(4, sorter);
                     }
                     ps.executeUpdate();
                     //System.out.println("inserted tagged indx, key " + key + ", sorter " + sorterStr + ", tag " + tag + ", json " + json);                    
@@ -314,10 +318,10 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
                 ps.setString(1, key);
                 ps.setString(2, json);
                 ps.setString(3, "***NULL***"); // TODO: review this magic null value
-                if (sorterStr == null) {
-                    ps.setNull(4, Types.VARCHAR);
+                if (sorter == null) {
+                    ps.setNull(4, Types.BINARY);
                 } else {
-                    ps.setString(4, sorterStr);
+                    ps.setBytes(4, sorter);
                 }
                 ps.executeUpdate();
                 //System.out.println("inserted untagged indx, key " + key + ", sorter " + sorterStr + ", json " + json);
@@ -326,6 +330,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
 
             conn.commit();
             conn.close();
+            //System.out.println("Closed connection for put indices");
 
             if (callbackOnAdditionalIndex != null) {
                 callbackOnAdditionalIndex.run();
@@ -429,6 +434,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
 
             conn.commit();
             conn.close();
+            //System.out.println("Closed connection for lock");
 
             return millisStillToWait;
 
@@ -473,6 +479,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             ps.close();
             conn.commit();
             conn.close();
+            //System.out.println("Closed connection for UNlock");
 
             return ret;
 
@@ -487,9 +494,8 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             Connection conn = _getSqlConnection(ds, indexName);
 
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectAll"));
-            ResultSet rs = ps.executeQuery();
 
-            ResultIterable ri = new ResultIterable(conn, rs, ps, from, size);
+            ResultIterable ri = new ResultIterable(conn, ps, from, size);
 
             return ri;
         } catch (SQLException e) {
@@ -507,9 +513,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
                 ps.setString(i + 1, anyOfTags[i]);
             }
 
-            ResultSet rs = ps.executeQuery();
-
-            ResultIterable ri = new ResultIterable(conn, rs, ps, from, size);
+            ResultIterable ri = new ResultIterable(conn, ps, from, size);
 
             return ri;
         } catch (SQLException e) {
@@ -525,16 +529,14 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectFilterSorted", "minSorter", minSorter, "maxSorter", maxSorter, "ascending", ascending));
             int i = 1;
             if (minSorter != null) {
-                ps.setString(i, _b32.encodeAsString(minSorter));
+                ps.setBytes(i, minSorter);
                 i++;
             }
             if (maxSorter != null) {
-                ps.setString(i, _b32.encodeAsString(maxSorter));
+                ps.setBytes(i, maxSorter);
                 i++;
             }
-            ResultSet rs = ps.executeQuery();
-
-            ResultIterable ri = new ResultIterable(conn, rs, ps, from, size);
+            ResultIterable ri = new ResultIterable(conn, ps, from, size);
 
             return ri;
         } catch (SQLException e) {
@@ -550,11 +552,11 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTagsAndFilterSorted", "tags", anyOfTags, "minSorter", minSorter, "maxSorter", maxSorter, "ascending", ascending));
             int i = 1;
             if (minSorter != null) {
-                ps.setString(i, _b32.encodeAsString(minSorter));
+                ps.setBytes(i, minSorter);
                 i++;
             }
             if (maxSorter != null) {
-                ps.setString(i, _b32.encodeAsString(maxSorter));
+                ps.setBytes(i, maxSorter);
                 i++;
             }
 
@@ -563,9 +565,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
                 i++;
             }
 
-            ResultSet rs = ps.executeQuery();
-
-            ResultIterable ri = new ResultIterable(conn, rs, ps, from, size);
+            ResultIterable ri = new ResultIterable(conn, ps, from, size);
 
             return ri;
         } catch (SQLException e) {
@@ -592,6 +592,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
 
             conn.commit();
             conn.close();
+            //System.out.println("Closed connection for remove one");
 
             if (callback != null) {
                 callback.run();
@@ -618,6 +619,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
 
             conn.commit();
             conn.close();
+            //System.out.println("Closed connection for remove all");
 
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -654,6 +656,8 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             rs.next();
             long ret = rs.getLong(1);
             rs.close();
+            conn.close();
+            //System.out.println("Closed connection for count");
             return ret;
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -674,6 +678,8 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             rs.next();
             long ret = rs.getLong(1);
             rs.close();
+            conn.close();
+            //System.out.println("Closed connection for count");
             return ret;
 
         } catch (SQLException e) {
@@ -689,17 +695,19 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "countFiltered", "minSorter", minSorter, "maxSorter", maxSorter));
             int i = 1;
             if (minSorter != null) {
-                ps.setString(i, _b32.encodeAsString(minSorter));
+                ps.setBytes(i, minSorter);
                 i++;
             }
             if (maxSorter != null) {
-                ps.setString(i, _b32.encodeAsString(maxSorter));
+                ps.setBytes(i, maxSorter);
                 i++;
             }
             ResultSet rs = ps.executeQuery();
             rs.next();
             long ret = rs.getLong(1);
             rs.close();
+            conn.close();
+            //System.out.println("Closed connection for count");
             return ret;
 
         } catch (SQLException e) {
@@ -715,11 +723,11 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "countByTagsAndFiltered", "tags", anyOfTags, "minSorter", minSorter, "maxSorter", maxSorter));
             int i = 1;
             if (minSorter != null) {
-                ps.setString(i, _b32.encodeAsString(minSorter));
+                ps.setBytes(i, minSorter);
                 i++;
             }
             if (maxSorter != null) {
-                ps.setString(i, _b32.encodeAsString(maxSorter));
+                ps.setBytes(i, maxSorter);
                 i++;
             }
 
@@ -732,6 +740,8 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             rs.next();
             long ret = rs.getLong(1);
             rs.close();
+            conn.close();
+            //System.out.println("Closed connection for count");
             return ret;
 
         } catch (SQLException e) {
