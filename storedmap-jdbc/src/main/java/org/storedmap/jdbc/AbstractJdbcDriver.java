@@ -13,13 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.vsetec.storedmap.jdbc;
+package org.storedmap.jdbc;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.vsetec.storedmap.Driver;
-import com.vsetec.storedmap.StoredMapException;
+import org.storedmap.Driver;
+import org.storedmap.StoredMapException;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
