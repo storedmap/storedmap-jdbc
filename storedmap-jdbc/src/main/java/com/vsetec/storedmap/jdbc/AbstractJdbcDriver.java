@@ -301,30 +301,17 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             sql = _getSql(indexName, "insertIndex");
             ps = conn.prepareStatement(sql);
             String json = _om.writeValueAsString(map);
-            if (tags != null && tags.length > 0) {
-                for (String tag : tags) {
-                    ps.setString(1, key);
-                    ps.setString(2, json);
-                    ps.setString(3, tag);
-                    if (sorter == null) {
-                        ps.setNull(4, Types.BINARY);
-                    } else {
-                        ps.setBytes(4, sorter);
-                    }
-                    ps.executeUpdate();
-                    //System.out.println("inserted tagged indx, key " + key + ", sorter " + sorterStr + ", tag " + tag + ", json " + json);                    
-                }
-            } else {
+            for (String tag : tags) {
                 ps.setString(1, key);
                 ps.setString(2, json);
-                ps.setString(3, "***NULL***"); // TODO: review this magic null value
+                ps.setString(3, tag);
                 if (sorter == null) {
                     ps.setNull(4, Types.BINARY);
                 } else {
                     ps.setBytes(4, sorter);
                 }
                 ps.executeUpdate();
-                //System.out.println("inserted untagged indx, key " + key + ", sorter " + sorterStr + ", json " + json);
+                //System.out.println("inserted tagged indx, key " + key + ", sorter " + sorterStr + ", tag " + tag + ", json " + json);                    
             }
             ps.close();
 
@@ -382,6 +369,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             }
         }
 
+        //System.out.println("RUNNING SQL: " + ret);
         return ret;
 
     }
