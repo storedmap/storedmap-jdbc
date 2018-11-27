@@ -78,8 +78,8 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         // override default query templates with those out of connection properties
         for (Map.Entry entry : properties.entrySet()) {
             String propertyName = (String) entry.getKey();
-            if (propertyName.startsWith("storedmap.jdbc.queries.")) {
-                propertyName = propertyName.substring("storedmap.jdbc.queries.".length());
+            if (propertyName.startsWith("jdbc.queries.")) {
+                propertyName = propertyName.substring("jdbc.queries.".length());
 
                 sqlProps.setProperty(propertyName, (String) entry.getValue());
             }
@@ -96,8 +96,8 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
 
         for (Map.Entry entry : properties.entrySet()) {
             String propertyName = (String) entry.getKey();
-            if (propertyName.startsWith("storedmap.jdbc.")) {
-                propertyName = propertyName.substring("storedmap.jdbc.".length());
+            if (propertyName.startsWith("jdbc.")) {
+                propertyName = propertyName.substring("jdbc.".length());
                 if (propertyName.equals("url")
                         || propertyName.equals("driver")
                         || propertyName.equals("user")
@@ -109,13 +109,13 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             ds.addConnectionProperty(propertyName, (String) entry.getValue());
         }
 
-        ds.setUrl(properties.getProperty("storedmap.jdbc.url"));
-        ds.setDriverClassName(properties.getProperty("storedmap.jdbc.driver"));
-        String user = properties.getProperty("storedmap.jdbc.user");
+        ds.setUrl(properties.getProperty("jdbc.url"));
+        ds.setDriverClassName(properties.getProperty("jdbc.driver"));
+        String user = properties.getProperty("jdbc.user");
         if (user != null) {
             ds.setUsername(user);
         }
-        String pwd = properties.getProperty("storedmap.jdbc.password");
+        String pwd = properties.getProperty("jdbc.password");
         if (pwd != null) {
             ds.setPassword(pwd);
         }
