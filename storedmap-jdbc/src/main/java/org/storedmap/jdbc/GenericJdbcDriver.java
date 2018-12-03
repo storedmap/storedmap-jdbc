@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Fyodor Kravchenko <fedd@vsetec.com>.
+ * Copyright 2018 Fyodor Kravchenko {@literal(<fedd@vsetec.com>)}.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import org.apache.commons.dbcp.BasicDataSource;
  * A generic implementation of a JDBC StoredMap {@link Driver} that totally
  * ignores the full text query
  *
- * @author Fyodor Kravchenko <fedd@vsetec.com>
+ * @author Fyodor Kravchenko {@literal(<fedd@vsetec.com>)}
  */
 public class GenericJdbcDriver extends AbstractJdbcDriver {
 
