@@ -284,6 +284,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             BasicDataSource ds,
             Map<String, Object> map,
             Locale[] locales,
+            String secondaryKey,
             byte[] sorter,
             String[] tags,
             Runnable callbackOnAdditionalIndex) {
@@ -309,6 +310,11 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
                     ps.setNull(4, Types.BINARY);
                 } else {
                     ps.setBytes(4, sorter);
+                }
+                if (secondaryKey == null) {
+                    ps.setNull(5, Types.VARCHAR);
+                } else {
+                    ps.setString(5, secondaryKey);
                 }
                 ps.executeUpdate();
                 //System.out.println("inserted tagged indx, key " + key + ", sorter " + sorterStr + ", tag " + tag + ", json " + json);                    
@@ -491,11 +497,10 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         }
     }
 
-    @Override
-    public Iterable<String> get(String indexName, BasicDataSource ds, String[] anyOfTags, int from, int size) {
+    private Iterable<String> _getByTags(String indexName, BasicDataSource ds, String[] anyOfTags, Boolean ascending, int from, int size) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
-            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTags", "tags", anyOfTags));
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTags", "tags", anyOfTags, "ascending", ascending));
 
             for (int i = 0; i < anyOfTags.length; i++) {
                 ps.setString(i + 1, anyOfTags[i]);
@@ -509,8 +514,20 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         }
     }
 
-    @Override
-    public Iterable<String> get(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, boolean ascending, int from, int size) {
+    private Iterable<String> _getBySec(String indexName, BasicDataSource ds, String sec, Boolean ascending, int from, int size) {
+        try { // TODO: convert all to try with resources
+            Connection conn = _getSqlConnection(ds, indexName);
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectBySec", "sec", sec, "ascending", ascending));
+            ps.setString(1, sec);
+            ResultIterable ri = new ResultIterable(conn, ps, from, size);
+
+            return ri;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private Iterable<String> _getFilteredSorted(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, Boolean ascending, int from, int size) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
@@ -532,8 +549,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         }
     }
 
-    @Override
-    public Iterable<String> get(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending, int from, int size) {
+    private Iterable<String> _getByTagsAndFilteredSorted(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, Boolean ascending, int from, int size) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
@@ -552,6 +568,77 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
                 ps.setString(i, tag);
                 i++;
             }
+
+            ResultIterable ri = new ResultIterable(conn, ps, from, size);
+
+            return ri;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private Iterable<String> _getByTagsAndSec(String indexName, BasicDataSource ds, String[] anyOfTags, String sec, Boolean ascending, int from, int size) {
+        try { // TODO: convert all to try with resources
+            Connection conn = _getSqlConnection(ds, indexName);
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTagsAndSec", "tags", anyOfTags, "sec", sec, "ascending", ascending));
+
+            int i = 0;
+            for (; i < anyOfTags.length; i++) {
+                ps.setString(i + 1, anyOfTags[i]);
+            }
+            ps.setString(i + 1, sec);
+
+            ResultIterable ri = new ResultIterable(conn, ps, from, size);
+
+            return ri;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private Iterable<String> _getBySecAndFilteredSorted(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, String sec, Boolean ascending, int from, int size) {
+        try { // TODO: convert all to try with resources
+            Connection conn = _getSqlConnection(ds, indexName);
+
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectBySecAndFilterSorted", "minSorter", minSorter, "maxSorter", maxSorter, "ascending", ascending, "sec", sec));
+            int i = 1;
+            if (minSorter != null) {
+                ps.setBytes(i, minSorter);
+                i++;
+            }
+            if (maxSorter != null) {
+                ps.setBytes(i, maxSorter);
+                i++;
+            }
+            ps.setString(i, sec);
+            ResultIterable ri = new ResultIterable(conn, ps, from, size);
+
+            return ri;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private Iterable<String> _getByTagsAndSecAndFilteredSorted(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, String sec, Boolean ascending, int from, int size) {
+        try { // TODO: convert all to try with resources
+            Connection conn = _getSqlConnection(ds, indexName);
+
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTagsAndFilterSorted", "tags", anyOfTags, "minSorter", minSorter, "maxSorter", maxSorter, "ascending", ascending, "sec", sec));
+            int i = 1;
+            if (minSorter != null) {
+                ps.setBytes(i, minSorter);
+                i++;
+            }
+            if (maxSorter != null) {
+                ps.setBytes(i, maxSorter);
+                i++;
+            }
+
+            for (String tag : anyOfTags) {
+                ps.setString(i, tag);
+                i++;
+            }
+            ps.setString(i, sec);
 
             ResultIterable ri = new ResultIterable(conn, ps, from, size);
 
@@ -615,23 +702,50 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     }
 
     @Override
+    public Iterable<String> get(String indexName, BasicDataSource connection, String secondaryKey, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, Boolean ascending, String textQuery) {
+        return get(indexName, connection, secondaryKey, minSorter, maxSorter, anyOfTags, ascending, textQuery, 0, Integer.MAX_VALUE);
+    }
+
+    @Override
+    public Iterable<String> get(String indexName, BasicDataSource connection, String secondaryKey, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, Boolean ascending, String textQuery, int from, int size) {
+        if (textQuery != null) {
+            return getWithQuery(indexName, connection, secondaryKey, minSorter, maxSorter, anyOfTags, ascending, textQuery);
+        }
+
+        if (secondaryKey != null) {
+            if (minSorter != null || maxSorter != null) {
+                if (anyOfTags != null) {
+                    return _getByTagsAndSecAndFilteredSorted(indexName, connection, minSorter, maxSorter, anyOfTags, secondaryKey, ascending, from, size);
+                } else {
+                    return _getBySecAndFilteredSorted(indexName, connection, minSorter, maxSorter, secondaryKey, ascending, from, size);
+                }
+            } else {
+                if (anyOfTags != null) {
+                    return _getByTagsAndSec(indexName, connection, anyOfTags, secondaryKey, ascending, from, size);
+                } else {
+                    return _getBySec(indexName, connection, secondaryKey, ascending, from, size);
+                }
+            }
+        } else {
+            if (minSorter != null || maxSorter != null) {
+                if (anyOfTags != null) {
+                    return _getByTagsAndFilteredSorted(indexName, connection, minSorter, maxSorter, anyOfTags, ascending, from, size);
+                } else {
+                    return _getFilteredSorted(indexName, connection, minSorter, maxSorter, ascending, from, size);
+                }
+            } else {
+                if (anyOfTags != null) {
+                    return _getByTags(indexName, connection, anyOfTags, ascending, from, size);
+                } else {
+                    return get(indexName, connection, from, size);
+                }
+            }
+        }
+    }
+
+    @Override
     public Iterable<String> get(String indexName, BasicDataSource connection) {
         return get(indexName, connection, 0, Integer.MAX_VALUE);
-    }
-
-    @Override
-    public Iterable<String> get(String indexName, BasicDataSource connection, String[] anyOfTags) {
-        return get(indexName, connection, anyOfTags, 0, Integer.MAX_VALUE);
-    }
-
-    @Override
-    public Iterable<String> get(String indexName, BasicDataSource connection, byte[] minSorter, byte[] maxSorter, boolean ascending) {
-        return get(indexName, connection, minSorter, maxSorter, ascending, 0, Integer.MAX_VALUE);
-    }
-
-    @Override
-    public Iterable<String> get(String indexName, BasicDataSource connection, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending) {
-        return get(indexName, connection, minSorter, maxSorter, anyOfTags, ascending, 0, Integer.MAX_VALUE);
     }
 
     @Override
@@ -652,8 +766,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         }
     }
 
-    @Override
-    public long count(String indexName, BasicDataSource ds, String[] anyOfTags) {
+    private long _countByTags(String indexName, BasicDataSource ds, String[] anyOfTags) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "countByTags", "tags", anyOfTags));
@@ -675,8 +788,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         }
     }
 
-    @Override
-    public long count(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter) {
+    private long _countFiltered(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
@@ -703,8 +815,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         }
     }
 
-    @Override
-    public long count(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, String[] anyOfTags) {
+    private long _countByTagsAndFiltered(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, String[] anyOfTags) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
@@ -737,4 +848,144 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         }
     }
 
+    private long _countBySec(String indexName, BasicDataSource ds, String sec) {
+        try { // TODO: convert all to try with resources
+            Connection conn = _getSqlConnection(ds, indexName);
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "countBySec", "sec", sec));
+            ps.setString(1, sec);
+            ResultSet rs = ps.executeQuery();
+            rs.next();
+            long ret = rs.getLong(1);
+            rs.close();
+            conn.close();
+            //System.out.println("Closed connection for count");
+            return ret;
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private long _countByTagsAndSec(String indexName, BasicDataSource ds, String[] anyOfTags, String sec) {
+        try { // TODO: convert all to try with resources
+            Connection conn = _getSqlConnection(ds, indexName);
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "countByTagsAndSec", "tags", anyOfTags, "sec", sec));
+            int i=0;
+            for (; i < anyOfTags.length; i++) {
+                ps.setString(i + 1, anyOfTags[i]);
+            }
+            ps.setString(i + 1, sec);
+            ResultSet rs = ps.executeQuery();
+            rs.next();
+            long ret = rs.getLong(1);
+            rs.close();
+            conn.close();
+            //System.out.println("Closed connection for count");
+            return ret;
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private long _countBySecAndFiltered(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, String sec) {
+        try { // TODO: convert all to try with resources
+            Connection conn = _getSqlConnection(ds, indexName);
+
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "countFiltered", "minSorter", minSorter, "maxSorter", maxSorter, "sec", sec));
+            int i = 1;
+            if (minSorter != null) {
+                ps.setBytes(i, minSorter);
+                i++;
+            }
+            if (maxSorter != null) {
+                ps.setBytes(i, maxSorter);
+                i++;
+            }
+            ps.setString(i, sec);
+            ResultSet rs = ps.executeQuery();
+            rs.next();
+            long ret = rs.getLong(1);
+            rs.close();
+            conn.close();
+            //System.out.println("Closed connection for count");
+            return ret;
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private long _countByTagsAndSecAndFiltered(String indexName, BasicDataSource ds, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, String sec) {
+        try { // TODO: convert all to try with resources
+            Connection conn = _getSqlConnection(ds, indexName);
+
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "countByTagsAndSecAndFiltered", "tags", anyOfTags, "minSorter", minSorter, "maxSorter", maxSorter, "sec", sec));
+            int i = 1;
+            if (minSorter != null) {
+                ps.setBytes(i, minSorter);
+                i++;
+            }
+            if (maxSorter != null) {
+                ps.setBytes(i, maxSorter);
+                i++;
+            }
+
+            for (String tag : anyOfTags) {
+                ps.setString(i, tag);
+                i++;
+            }
+            ps.setString(i, sec);
+            ResultSet rs = ps.executeQuery();
+            rs.next();
+            long ret = rs.getLong(1);
+            rs.close();
+            conn.close();
+            //System.out.println("Closed connection for count");
+            return ret;
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public long count(String indexName, BasicDataSource connection, String secondaryKey, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, String textQuery){
+        if(textQuery!=null){
+            return countWithQuery(indexName, connection, secondaryKey, minSorter, maxSorter, anyOfTags, textQuery);
+        }
+        
+        if (secondaryKey != null) {
+            if (minSorter != null || maxSorter != null) {
+                if (anyOfTags != null) {
+                    return _countByTagsAndSecAndFiltered(indexName, connection, minSorter, maxSorter, anyOfTags, secondaryKey);
+                } else {
+                    return _countBySecAndFiltered(indexName, connection, minSorter, maxSorter, secondaryKey);
+                }
+            } else {
+                if (anyOfTags != null) {
+                    return _countByTagsAndSec(indexName, connection, anyOfTags, secondaryKey);
+                } else {
+                    return _countBySec(indexName, connection, secondaryKey);
+                }
+            }
+        } else {
+            if (minSorter != null || maxSorter != null) {
+                if (anyOfTags != null) {
+                    return _countByTagsAndFiltered(indexName, connection, minSorter, maxSorter, anyOfTags);
+                } else {
+                    return _countFiltered(indexName, connection, minSorter, maxSorter);
+                }
+            } else {
+                if (anyOfTags != null) {
+                    return _countByTags(indexName, connection, anyOfTags);
+                } else {
+                    return count(indexName, connection);
+                }
+            }
+        }
+    }
+    
+    public abstract long countWithQuery(String indexName, BasicDataSource connection, String secondaryKey, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, String textQuery);
+    public abstract Iterable<String> getWithQuery(String indexName, BasicDataSource connection, String secondaryKey, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, Boolean ascending, String textQuery);
 }

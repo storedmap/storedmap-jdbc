@@ -48,63 +48,14 @@ public class GenericJdbcDriver extends AbstractJdbcDriver {
     }
 
     @Override
-    public Iterable<String> get(String indexName, BasicDataSource ds, String textQuery) {
-        return Collections.EMPTY_LIST;
-    }
-
-    @Override
-    public Iterable<String> get(String indexName, BasicDataSource ds, String textQuery, String[] anyOfTags) {
-        return get(indexName, ds, anyOfTags);
-    }
-
-    @Override
-    public Iterable<String> get(String indexName, BasicDataSource ds, String textQuery, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending) {
-        return get(indexName, ds, minSorter, maxSorter, anyOfTags, ascending);
-    }
-
-    @Override
-    public Iterable<String> get(String indexName, BasicDataSource ds, String textQuery, byte[] minSorter, byte[] maxSorter, boolean ascending) {
-        return get(indexName, ds, minSorter, maxSorter, ascending);
-    }
-
-    @Override
-    public Iterable<String> get(String indexName, BasicDataSource connection, String textQuery, int from, int size) {
-        return Collections.EMPTY_LIST;
-    }
-
-    @Override
-    public Iterable<String> get(String indexName, BasicDataSource connection, String textQuery, String[] anyOfTags, int from, int size) {
-        return get(indexName, connection, anyOfTags, from, size);
-    }
-
-    @Override
-    public Iterable<String> get(String indexName, BasicDataSource connection, String textQuery, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, boolean ascending, int from, int size) {
-        return get(indexName, connection, minSorter, maxSorter, anyOfTags, ascending, from, size);
-    }
-
-    @Override
-    public Iterable<String> get(String indexName, BasicDataSource connection, String textQuery, byte[] minSorter, byte[] maxSorter, boolean ascending, int from, int size) {
-        return get(indexName, connection, minSorter, maxSorter, ascending, from, size);
-    }
-
-    @Override
-    public long count(String indexName, BasicDataSource connection, String textQuery) {
+    public long countWithQuery(String indexName, BasicDataSource connection, String secondaryKey, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, String textQuery) {
         return 0;
     }
 
     @Override
-    public long count(String indexName, BasicDataSource connection, String textQuery, String[] anyOfTags) {
-        return count(indexName, connection, anyOfTags);
+    public Iterable<String> getWithQuery(String indexName, BasicDataSource connection, String secondaryKey, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, Boolean ascending, String textQuery) {
+        return Collections.EMPTY_LIST;
     }
 
-    @Override
-    public long count(String indexName, BasicDataSource connection, String textQuery, byte[] minSorter, byte[] maxSorter, String[] anyOfTags) {
-        return count(indexName, connection, minSorter, maxSorter, anyOfTags);
-    }
-
-    @Override
-    public long count(String indexName, BasicDataSource connection, String textQuery, byte[] minSorter, byte[] maxSorter) {
-        return count(indexName, connection, minSorter, maxSorter);
-    }
 
 }
