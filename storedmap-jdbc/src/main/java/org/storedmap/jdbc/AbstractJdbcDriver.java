@@ -870,7 +870,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
             PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "countByTagsAndSec", "tags", anyOfTags, "sec", sec));
-            int i=0;
+            int i = 0;
             for (; i < anyOfTags.length; i++) {
                 ps.setString(i + 1, anyOfTags[i]);
             }
@@ -950,11 +950,11 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     }
 
     @Override
-    public long count(String indexName, BasicDataSource connection, String secondaryKey, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, String textQuery){
-        if(textQuery!=null){
+    public long count(String indexName, BasicDataSource connection, String secondaryKey, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, String textQuery) {
+        if (textQuery != null) {
             return countWithQuery(indexName, connection, secondaryKey, minSorter, maxSorter, anyOfTags, textQuery);
         }
-        
+
         if (secondaryKey != null) {
             if (minSorter != null || maxSorter != null) {
                 if (anyOfTags != null) {
@@ -985,7 +985,8 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             }
         }
     }
-    
+
     public abstract long countWithQuery(String indexName, BasicDataSource connection, String secondaryKey, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, String textQuery);
+
     public abstract Iterable<String> getWithQuery(String indexName, BasicDataSource connection, String secondaryKey, byte[] minSorter, byte[] maxSorter, String[] anyOfTags, Boolean ascending, String textQuery);
 }

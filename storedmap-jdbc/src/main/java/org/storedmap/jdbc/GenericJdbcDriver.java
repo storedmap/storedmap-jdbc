@@ -57,5 +57,4 @@ public class GenericJdbcDriver extends AbstractJdbcDriver {
         return Collections.EMPTY_LIST;
     }
 
-
 }
