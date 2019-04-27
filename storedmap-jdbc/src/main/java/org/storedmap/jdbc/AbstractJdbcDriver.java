@@ -18,8 +18,6 @@ package org.storedmap.jdbc;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import org.storedmap.Driver;
-import org.storedmap.StoredMapException;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -43,6 +41,8 @@ import org.apache.commons.dbcp.BasicDataSource;
 import org.mvel2.templates.CompiledTemplate;
 import org.mvel2.templates.TemplateCompiler;
 import org.mvel2.templates.TemplateRuntime;
+import org.storedmap.Driver;
+import org.storedmap.StoredMapException;
 
 /**
  *
@@ -381,7 +381,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     }
 
     @Override
-    public int tryLock(String key, String indexName, BasicDataSource ds, int milliseconds) {
+    public Lock tryLock(String key, String indexName, BasicDataSource ds, int milliseconds, String sessionId) {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
             String sql = _getSql(indexName, "selectLock");
@@ -390,16 +390,19 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             ResultSet rs = ps.executeQuery();
 
             int millisStillToWait;
+            String waiterId;
 
             Timestamp currentTime;
             if (rs.next()) {
                 currentTime = rs.getTimestamp(1);
                 Timestamp createdat = rs.getTimestamp(2);
                 int waitfor = rs.getInt(3);
+                waiterId = rs.getString(4);
                 millisStillToWait = (int) (createdat.toInstant().toEpochMilli() + waitfor - currentTime.toInstant().toEpochMilli());
 
             } else {
                 currentTime = null;
+                waiterId = sessionId;
                 millisStillToWait = 0;
             }
             rs.close();
@@ -413,13 +416,15 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
                     ps = conn.prepareStatement(sql);
                     ps.setString(1, key);
                     ps.setInt(2, milliseconds);
+                    ps.setString(3, sessionId);
                     ps.executeUpdate();
                     ps.close();
                 } else {
                     sql = _getSql(indexName, "updateLock");
                     ps = conn.prepareStatement(sql);
                     ps.setInt(1, milliseconds);
-                    ps.setString(2, key);
+                    ps.setString(2, sessionId);
+                    ps.setString(3, key);
                     ps.executeUpdate();
                     ps.close();
                 }
@@ -430,7 +435,17 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             conn.close();
             //System.out.println("Closed connection for lock");
 
-            return millisStillToWait;
+            return new Lock() {
+                @Override
+                public int getWaitTime() {
+                    return millisStillToWait;
+                }
+
+                @Override
+                public String getLockerSession() {
+                    return waiterId;
+                }
+            };
 
         } catch (SQLException e) {
             throw new RuntimeException(e);
