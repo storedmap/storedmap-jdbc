@@ -34,9 +34,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import org.apache.commons.dbcp.BasicDataSource;
 import org.mvel2.templates.CompiledTemplate;
 import org.mvel2.templates.TemplateCompiler;
@@ -60,7 +57,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     private final Map<String, Map<String, Object>> _mvelContext = new HashMap<>();
     private final Map<String, CompiledTemplate> _dynamicSql = new HashMap<>();
     private final Map<String, Map<String, String>> _indexStaticSql = new HashMap<>();
-    private final Map<BasicDataSource, ExecutorService> _indexers = new HashMap<>();
+    //private final Map<BasicDataSource, ExecutorService> _indexers = new HashMap<>();
 
     @Override
     public BasicDataSource openConnection(Properties properties) {
@@ -97,6 +94,12 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         for (Map.Entry entry : properties.entrySet()) {
             String propertyName = (String) entry.getKey();
             if (propertyName.startsWith("jdbc.")) {
+                if (propertyName.startsWith("jdbc.queries.")) {
+                    continue;
+                }
+                if (propertyName.startsWith("jdbc.pool.")) {
+                    continue;
+                }
                 propertyName = propertyName.substring("jdbc.".length());
                 if (propertyName.equals("url")
                         || propertyName.equals("driver")
@@ -108,6 +111,13 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             }
             ds.addConnectionProperty(propertyName, (String) entry.getValue());
         }
+
+        // TODO: parametrize other interesting pooling and non pooling options
+        ds.setMaxActive(Integer.parseInt(properties.getProperty("jdbc.pool.maxActive", "100")));
+        ds.setMaxIdle(Integer.parseInt(properties.getProperty("jdbc.pool.maxIdle", "50")));
+        ds.setMinIdle(Integer.parseInt(properties.getProperty("jdbc.pool.minIdle", "10")));
+        ds.setInitialSize(Integer.parseInt(properties.getProperty("jdbc.pool.initialSize", "10")));
+        ds.setPoolPreparedStatements(Boolean.parseBoolean(properties.getProperty("jdbc.pool.poolPreparedStatements", "true")));
 
         ds.setUrl(properties.getProperty("jdbc.url"));
         ds.setDriverClassName(properties.getProperty("jdbc.driver"));
@@ -123,7 +133,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         ds.setDefaultAutoCommit(false);
 
         _indices.put(ds, new HashSet<>());
-        _indexers.put(ds, Executors.newCachedThreadPool((Runnable r) -> new Thread(r, "StoredMapJdbcIndexer-" + (int) (Math.random() * 999))));
+        //_indexers.put(ds, Executors.newCachedThreadPool((Runnable r) -> new Thread(r, "StoredMapJdbcIndexer-" + (int) (Math.random() * 999))));
 
         //TODO: implement a single thread very old lock sweeper - remove locks that are a month old from time to time like once a week
         return ds;
@@ -133,14 +143,13 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
     public void closeConnection(BasicDataSource ds) {
         try {
 
-            ExecutorService indexer = _indexers.remove(ds);
-            indexer.shutdown();
-            try {
-                indexer.awaitTermination(2, TimeUnit.MINUTES);
-            } catch (InterruptedException e) {
-                throw new RuntimeException("Unexpected interruption", e);
-            }
-
+            //ExecutorService indexer = _indexers.remove(ds);
+            //indexer.shutdown();
+            //try {
+            //    indexer.awaitTermination(2, TimeUnit.MINUTES);
+            //} catch (InterruptedException e) {
+            //    throw new RuntimeException("Unexpected interruption", e);
+            //}
             _indices.remove(ds);
             ds.close();
         } catch (SQLException e) {
@@ -233,47 +242,42 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             Runnable callbackBeforeIndex,
             Runnable callbackAfterIndex) {
 
-        _indexers.get(ds).submit(new Runnable() {
-            @Override
-            public void run() {
-                try { // TODO: convert all to try with resources
+        try { // TODO: convert all to try with resources
 
-                    if (callbackBeforeIndex != null) {
-                        callbackBeforeIndex.run();
-                    }
-
-                    Connection conn = _getSqlConnection(ds, indexName);
-
-                    // first remove all
-                    String sql = _getSql(indexName, "delete");
-                    PreparedStatement ps = conn.prepareStatement(sql);
-                    ps.setString(1, key);
-                    ps.executeUpdate();
-                    ps.close();
-
-                    // now insert main value
-                    sql = _getSql(indexName, "insert");
-                    ps = conn.prepareStatement(sql);
-                    ps.setString(1, key);
-                    ps.setBytes(2, value);
-                    ps.executeUpdate();
-                    //System.out.println("inserted main, key " + key);
-                    ps.close();
-
-                    conn.commit();
-                    conn.close();
-                    //System.out.println("Closed connection for regular put");
-
-                    // call callback
-                    if (callbackAfterIndex != null) {
-                        callbackAfterIndex.run();
-                    }
-
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                }
+            if (callbackBeforeIndex != null) {
+                callbackBeforeIndex.run();
             }
-        });
+
+            Connection conn = _getSqlConnection(ds, indexName);
+
+            // first remove all
+            String sql = _getSql(indexName, "delete");
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setString(1, key);
+            ps.executeUpdate();
+            ps.close();
+
+            // now insert main value
+            sql = _getSql(indexName, "insert");
+            ps = conn.prepareStatement(sql);
+            ps.setString(1, key);
+            ps.setBytes(2, value);
+            ps.executeUpdate();
+            //System.out.println("inserted main, key " + key);
+            ps.close();
+
+            conn.commit();
+            conn.close();
+            //System.out.println("Closed connection for regular put");
+
+            // call callback
+            if (callbackAfterIndex != null) {
+                callbackAfterIndex.run();
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
 
     }
 
