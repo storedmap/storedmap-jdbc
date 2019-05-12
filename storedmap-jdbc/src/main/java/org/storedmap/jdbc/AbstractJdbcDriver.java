@@ -113,7 +113,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         }
 
         // TODO: parametrize other interesting pooling and non pooling options
-        ds.setMaxActive(Integer.parseInt(properties.getProperty("jdbc.pool.maxActive", "100")));
+        ds.setMaxActive(Integer.parseInt(properties.getProperty("jdbc.pool.maxActive", "90")));
         ds.setMaxIdle(Integer.parseInt(properties.getProperty("jdbc.pool.maxIdle", "50")));
         ds.setMinIdle(Integer.parseInt(properties.getProperty("jdbc.pool.minIdle", "10")));
         ds.setInitialSize(Integer.parseInt(properties.getProperty("jdbc.pool.initialSize", "10")));
