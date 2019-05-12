@@ -130,6 +130,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             ds.setPassword(pwd);
         }
 
+        ds.setDefaultTransactionIsolation(Connection.TRANSACTION_READ_UNCOMMITTED);
         ds.setDefaultAutoCommit(false);
 
         _indices.put(ds, new HashSet<>());
@@ -433,9 +434,10 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
                     ps.close();
                 }
 
+                conn.commit();
+
             }
 
-            conn.commit();
             conn.close();
             //System.out.println("Closed connection for lock");
 
@@ -463,9 +465,11 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             String sql = _getSql(indexName, "deleteLock");
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setString(1, key);
-            ps.executeUpdate();
+            int deleted = ps.executeUpdate();
             ps.close();
-            conn.commit();
+            if (deleted > 0) {
+                conn.commit();
+            }
             conn.close();
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -490,7 +494,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
 
             rs.close();
             ps.close();
-            conn.commit();
+            //conn.commit();
             conn.close();
             //System.out.println("Closed connection for UNlock");
 
@@ -675,16 +679,18 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
             String sql = _getSql(indexName, "delete");
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setString(1, key);
-            ps.executeUpdate();
+            int deleted = ps.executeUpdate();
             ps.close();
 
             sql = _getSql(indexName, "deleteIndex");
             ps = conn.prepareStatement(sql);
             ps.setString(1, key);
-            ps.executeUpdate();
+            deleted += ps.executeUpdate();
             ps.close();
 
-            conn.commit();
+            if (deleted > 0) {
+                conn.commit();
+            }
             conn.close();
             //System.out.println("Closed connection for remove one");
 

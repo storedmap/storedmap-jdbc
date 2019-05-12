@@ -122,7 +122,7 @@ public class ResultIterable implements Iterable<String>, Closeable {
     public void close() throws IOException {
         try {
             if (!_rs.isClosed()) {
-                _conn.commit();
+                //_conn.commit();
                 _rs.close();
                 _ps.close();
                 _conn.close();
