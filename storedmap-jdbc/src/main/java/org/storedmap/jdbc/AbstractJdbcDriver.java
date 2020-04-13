@@ -646,7 +646,7 @@ public abstract class AbstractJdbcDriver implements Driver<BasicDataSource> {
         try { // TODO: convert all to try with resources
             Connection conn = _getSqlConnection(ds, indexName);
 
-            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTagsAndFilterSorted", "tags", anyOfTags, "minSorter", minSorter, "maxSorter", maxSorter, "ascending", ascending, "sec", sec));
+            PreparedStatement ps = conn.prepareStatement(_getSql(indexName, "selectByTagsAndSecAndFilterSorted", "tags", anyOfTags, "minSorter", minSorter, "maxSorter", maxSorter, "ascending", ascending, "sec", sec));
             int i = 1;
             if (minSorter != null) {
                 ps.setBytes(i, minSorter);
